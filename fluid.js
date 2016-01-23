@@ -12,12 +12,12 @@ function fluid(width, height, canvas) {
     this.view = this.ctx.createImageData(this.width, this.height);
 
     // Concentration
-    this.c0 = new field(width, height);
-    this.c1 = new field(width, height);
+    this.c0 = new field(width, height, 1);
+    this.c1 = new field(width, height, 1);
 
     // Velocity
-    this.v0 = new field(width, height);
-    this.v1 = new field(width, height);
+    this.v0 = new field(width, height, 2);
+    this.v1 = new field(width, height, 2);
 
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
@@ -67,16 +67,19 @@ function fluid(width, height, canvas) {
 
     this.step = function() {
         var delta = 0.1;
-        var vDst = this.showBack ? this.v0: this.v1;
-        var vSrc = !this.showBack ? this.v0: this.v1;
+        var vDst = !this.showBack ? this.v0: this.v1;
+        var vSrc = this.showBack ? this.v0: this.v1;
 
-        var cDst = this.showBack ? this.c0: this.c1;
-        var cSrc = !this.showBack ? this.c0: this.c1;
+        var cDst = !this.showBack ? this.c0: this.c1;
+        var cSrc = this.showBack ? this.c0: this.c1;
 
         // Solve non-divergence free velocity for each cell
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
+                var index = i * this.width + j;
                 // Solve a cell
+                // Dumb effect just so that it does something
+                cDst.data[index] = cSrc.sample(j - 0.2, i+ 0.75);
             }
         }
 
@@ -84,8 +87,47 @@ function fluid(width, height, canvas) {
     }
 }
 
-function field(width, height) {
+function field(width, height, dimension) {
     this.data = new Array(width * height);
     this.width = width;
     this.height = height;
+    this.dimension = dimension;
+
+    this.sample = function(x, y) {
+        // Anything outside of the inner box is zero
+        if(x < 0.5 || x >= this.width - 0.5) {return this.zero();}
+        if(y < 0.5 || y >= this.height - 0.5) {return this.zero();}
+
+        var topLeft = Math.round(y - 1) * this.width + Math.round(x - 1);
+        var topRight = topLeft + 1;
+        var btmLeft = topLeft + this.width;
+        var btmRight = btmLeft + 1;
+
+        var kx = x - Math.round(x - 1) - 0.5;
+        var ky = y - Math.round(y - 1) - 0.5;
+
+        // Perform a bilerp
+        var topVal = this.lerp(kx, this.data[topLeft], this.data[topRight]);
+        var btmVal = this.lerp(kx, this.data[btmLeft], this.data[btmRight]);
+
+        return this.lerp(ky, topVal, btmVal);
+    }
+
+    this.zero = function() {
+        if(this.dimension == 1)
+            return 0;
+        else if(this.dimensions == 2)
+            return {x:0, y:0};
+    }
+
+    this.lerp = function(k, a, b) {
+        if(this.dimension == 1) {
+            return (1 - k) * a + (k) * b;
+        }
+        if(this.dimension == 2) {
+            var x = (1 - k) * a.x + (k) * b.x;
+            var y = (1 - k) * a.y + (k) * b.y;
+            return {x:x, y:y};
+        }
+    }
 }
