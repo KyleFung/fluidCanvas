@@ -22,13 +22,37 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
             var index = i * width + j;
-            // Initialize scalar fields
+            // Initialize default setup
             this.c0.data[index] = 0;
             this.c1.data[index] = 0;
-
-            // Initialize vector fields
             this.v0.data[index] = {x:0, y:0};
             this.v1.data[index] = {x:0, y:0};
+
+            // Test Setup 1:
+            // Circular blob of dye and uniform velocity field to right
+            var dx = j - 70;
+            var dy = i - 90;
+            if((dx * dx) + (dy * dy) < 400) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+            this.v0.data[index] = {x:1, y:0};
+            this.v1.data[index] = {x:1, y:0};
+            // End test setup 1
+
+            // Test Setup 2:
+            // Circular blob of dye with a rotational velocity field (flushing toilet)
+            var dx = j - 70;
+            var dy = i - 90;
+            if((dx * dx) + (dy * dy) < 300) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+            var dx = j - 60;
+            var dy = i - 60;
+            this.v0.data[index] = {x:-dy, y:dx};
+            this.v1.data[index] = {x:-dy, y:dx};
+            // End test setup 2
         }
     }
 
@@ -47,11 +71,11 @@ function fluid(width, height, canvas) {
             for(var j = 0; j < src.width; j++) {
                 var index = i * src.width + j;
                 if(this.renderVel) {
-                    this.updatePixel(i, j, (src.data[index].x * src.data[index].x +
+                    this.updatePixel(j, i, (src.data[index].x * src.data[index].x +
                                             src.data[index].y * src.data[index].y));
                 }
                 else {
-                    this.updatePixel(i, j, src.data[index]);
+                    this.updatePixel(j, i, src.data[index]);
                 }
             }
         }
@@ -65,6 +89,18 @@ function fluid(width, height, canvas) {
         this.view.data[index + 3] = 255;
     }
 
+    // Advects a quantity at (x+0.5, y+0.5) in src using vel into dst
+    this.advect = function(x, y, dst, src, vel, delta) {
+        // Integrate backwards in time by solving for (x0,y0)
+        var u = vel.data[y * this.width + x];
+        var x0 = x - delta * u.x + 0.5;
+        var y0 = y - delta * u.y + 0.5;
+
+        // Solve q1(x,y) by interpolating for q0(x0,y0)
+        var result = src.sample(x0, y0);
+        dst.data[y * this.width + x] = result;
+    }
+
     this.step = function() {
         var delta = 0.1;
         var vDst = !this.showBack ? this.v0: this.v1;
@@ -76,10 +112,8 @@ function fluid(width, height, canvas) {
         // Solve non-divergence free velocity for each cell
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
-                var index = i * this.width + j;
-                // Solve a cell
-                // Dumb effect just so that it does something
-                cDst.data[index] = cSrc.sample(j - 0.2, i+ 0.75);
+                // Advect the concentration field
+                this.advect(j, i, cDst, cSrc, vDst, delta);
             }
         }
 
