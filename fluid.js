@@ -30,6 +30,7 @@ function fluid(width, height, canvas) {
 
             // Test Setup 1:
             // Circular blob of dye and uniform velocity field to right
+            /*
             var dx = j - 70;
             var dy = i - 90;
             if((dx * dx) + (dy * dy) < 400) {
@@ -38,10 +39,12 @@ function fluid(width, height, canvas) {
             }
             this.v0.data[index] = {x:1, y:0};
             this.v1.data[index] = {x:1, y:0};
+            */
             // End test setup 1
 
             // Test Setup 2:
             // Circular blob of dye with a rotational velocity field (flushing toilet)
+            /*
             var dx = j - 70;
             var dy = i - 90;
             if((dx * dx) + (dy * dy) < 300) {
@@ -52,7 +55,24 @@ function fluid(width, height, canvas) {
             var dy = i - 60;
             this.v0.data[index] = {x:-dy, y:dx};
             this.v1.data[index] = {x:-dy, y:dx};
+            */
             // End test setup 2
+
+            // Test Setup 3:
+            // Circular blob of dye with a small rotational velocity field
+            var dx = j - 70;
+            var dy = i - 90;
+            if((dx * dx) + (dy * dy) < 300) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+            var dx = j - 60;
+            var dy = i - 60;
+            if((dx * dx) + (dy * dy) < 500) {
+                this.v0.data[index] = {x:-dy, y:dx};
+                this.v1.data[index] = {x:-dy, y:dx};
+            }
+            // End test setup 3
         }
     }
 
