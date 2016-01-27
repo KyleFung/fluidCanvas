@@ -6,7 +6,10 @@ function fluid(width, height, canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.showBack = true;
-    this.renderVel = false;
+
+    // Rendered field
+    // 0 = concentration, 1 = velocity
+    this.renderedField = 0;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -77,25 +80,33 @@ function fluid(width, height, canvas) {
     }
 
     this.render = function() {
-        var src = this.showBack ? this.c0: this.c1;
-        if(this.renderVel) {
-            var src = this.showBack ? this.v0: this.v1;
-        }
-        this.updateView(src);
+        this.updateView(1.0);
         this.ctx.putImageData(this.view, 0, 0);
     }
 
-    this.updateView = function(src) {
+    this.updateView = function(scale) {
+        // Choose which field to use to render
+        switch(this.renderedField) {
+            case 0:
+                src = this.showBack ? this.c0: this.c1;
+                break;
+            case 1:
+                src = this.showBack ? this.v0: this.v1;
+                break;
+            default:
+        }
+
         // Copy src into the view buffer
         for(var i = 0; i < src.height; i++) {
             for(var j = 0; j < src.width; j++) {
                 var index = i * src.width + j;
-                if(this.renderVel) {
-                    this.updatePixel(j, i, (src.data[index].x * src.data[index].x +
+                // Decide mapping based on field type
+                if(src.dimension == 2) {
+                    this.updatePixel(j, i, scale * (src.data[index].x * src.data[index].x +
                                             src.data[index].y * src.data[index].y));
                 }
                 else {
-                    this.updatePixel(j, i, src.data[index]);
+                    this.updatePixel(j, i, scale * src.data[index]);
                 }
             }
         }
