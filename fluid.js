@@ -8,7 +8,7 @@ function fluid(width, height, canvas) {
     this.showBack = true;
 
     // Rendered field
-    // 0 = concentration, 1 = velocity
+    // 0 = concentration, 1 = velocity, 2 = divergence
     this.renderedField = 0;
 
     // Initialize rendering buffer
@@ -22,6 +22,9 @@ function fluid(width, height, canvas) {
     this.v0 = new field(width, height, 2);
     this.v1 = new field(width, height, 2);
 
+    // Divergence of velocity
+    this.div = new field(width, height, 1);
+
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
             var index = i * width + j;
@@ -30,6 +33,7 @@ function fluid(width, height, canvas) {
             this.c1.data[index] = 0;
             this.v0.data[index] = {x:0, y:0};
             this.v1.data[index] = {x:0, y:0};
+            this.div.data[index] = 0;
 
             // Test Setup 1:
             // Circular blob of dye and uniform velocity field to right
@@ -76,6 +80,18 @@ function fluid(width, height, canvas) {
                 this.v1.data[index] = {x:-dy, y:dx};
             }
             // End test setup 3
+
+            /*
+            // Test Setup 4:
+            // An exploding velocity field with divergence = 2
+            var dx = j;
+            var dy = i;
+            if((dx * dx) + (dy * dy) < 500) {
+                this.v0.data[index] = {x:dx, y:dy};
+                this.v1.data[index] = {x:dx, y:dy};
+            }
+            // End test setup 4
+            */
         }
     }
 
@@ -92,6 +108,9 @@ function fluid(width, height, canvas) {
                 break;
             case 1:
                 src = this.showBack ? this.v0: this.v1;
+                break;
+            case 2:
+                src = this.div;
                 break;
             default:
         }
@@ -147,6 +166,8 @@ function fluid(width, height, canvas) {
                 this.advect(j, i, cDst, cSrc, vDst, delta);
             }
         }
+        // Calculate divergence
+        vDst.divergence(this.div);
 
         this.showBack = !this.showBack;
     }
@@ -178,10 +199,30 @@ function field(width, height, dimension) {
         return this.lerp(ky, topVal, btmVal);
     }
 
+    // Calculate the divergence of field into dst
+    // Assumes dst is the same size as field
+    this.divergence = function(dst) {
+        for(var i = 0; i < dst.height; i++) {
+            for(var j = 0; j < dst.width; j++) {
+                // Map index values into R2 values
+                var x = j + 0.5;
+                var y = i + 0.5;
+                // Sample around the point (x,y)
+                var s = this.sample(x, y + 0.5);
+                var n = this.sample(x, y - 0.5);
+                var e = this.sample(x + 0.5, y);
+                var w = this.sample(x - 0.5, y);
+
+                var index = i * dst.width + j;
+                dst.data[index] = (e.x - w.x) + (s.y - n.y);
+            }
+        }
+    }
+
     this.zero = function() {
         if(this.dimension == 1)
             return 0;
-        else if(this.dimensions == 2)
+        else if(this.dimension == 2)
             return {x:0, y:0};
     }
 
