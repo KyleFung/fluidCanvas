@@ -9,7 +9,7 @@ function fluid(width, height, canvas) {
 
     // Rendered field
     // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
-    this.renderedField = 4;
+    this.renderedField = 1;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -166,6 +166,22 @@ function fluid(width, height, canvas) {
         dst.data[y * this.width + x] = result;
     }
 
+    // Project the given velocity field onto its divergence free component
+    this.project = function(vel) {
+        // Recompute divergence of vel
+        vel.divergence(this.div);
+
+        // Use jacobi solver to calculate pressure field
+        // Magic numbers taken from the discrete laplacian definition
+        this.p1.jacobi(this.p0, this.div, -1, 4, 128);
+
+        // Calculate its gradient into gp
+        this.p1.gradient(this.gp);
+
+        // Subtract gp from vel
+        vel.subtract(this.gp);
+    }
+
     this.step = function() {
         var delta = 0.1;
         var vDst = !this.showBack ? this.v0: this.v1;
@@ -181,12 +197,7 @@ function fluid(width, height, canvas) {
                 this.advect(j, i, cDst, cSrc, vDst, delta);
             }
         }
-        // Calculate divergence and iteratively solve pressure
-        vDst.divergence(this.div);
-        this.p1.jacobi(this.p0, this.div, -1, 4, 32);
-
-        // Update gradient of p1 into gp
-        this.p1.gradient(this.gp);
+        this.project(vDst);
 
         this.showBack = !this.showBack;
     }
@@ -284,6 +295,24 @@ function field(width, height, dimension) {
                 // Calculate the gradient into destination
                 dst.data[index].x = (e - w) / 2.0;
                 dst.data[index].y = (s - n) / 2.0;
+            }
+        }
+    }
+
+    // Calculate (this - other) into this
+    this.subtract = function(other) {
+        // Loop through and subtract element by element
+        for(var i = 0; i < this.height; i++) {
+            for(var j = 0; j < this.width; j++) {
+                var index = i * this.width + j;
+                // Actual subtraction depends on field type
+                if(this.dimension == 1) {
+                    this.data[index] = this.data[index] - other.data[index];
+                }
+                if(this.dimension == 2) {
+                    this.data[index].x = this.data[index].x - other.data[index].x;
+                    this.data[index].y = this.data[index].y - other.data[index].y;
+                }
             }
         }
     }
