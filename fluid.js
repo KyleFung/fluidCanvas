@@ -8,7 +8,7 @@ function fluid(width, height, canvas) {
     this.showBack = true;
 
     // Rendered field
-    // 0 = concentration, 1 = velocity, 2 = divergence
+    // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure
     this.renderedField = 0;
 
     // Initialize rendering buffer
@@ -25,6 +25,11 @@ function fluid(width, height, canvas) {
     // Divergence of velocity
     this.div = new field(width, height, 1);
 
+    // Pressure and its gradient
+    // p0 is for scratch calculations; p1 holds the actual values
+    this.p0 = new field(width, height, 1);
+    this.p1 = new field(width, height, 1);
+
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
             var index = i * width + j;
@@ -34,6 +39,8 @@ function fluid(width, height, canvas) {
             this.v0.data[index] = {x:0, y:0};
             this.v1.data[index] = {x:0, y:0};
             this.div.data[index] = 0;
+            this.p0.data[index] = 0;
+            this.p1.data[index] = 0;
 
             // Test Setup 1:
             // Circular blob of dye and uniform velocity field to right
@@ -102,6 +109,7 @@ function fluid(width, height, canvas) {
 
     this.updateView = function(scale) {
         // Choose which field to use to render
+        var src = undefined;
         switch(this.renderedField) {
             case 0:
                 src = this.showBack ? this.c0: this.c1;
@@ -111,6 +119,9 @@ function fluid(width, height, canvas) {
                 break;
             case 2:
                 src = this.div;
+                break;
+            case 3:
+                src = this.p1;
                 break;
             default:
         }
@@ -125,7 +136,7 @@ function fluid(width, height, canvas) {
                                             src.data[index].y * src.data[index].y));
                 }
                 else {
-                    this.updatePixel(j, i, scale * src.data[index]);
+                    this.updatePixel(j, i, scale * Math.abs(src.data[index]));
                 }
             }
         }
@@ -166,8 +177,9 @@ function fluid(width, height, canvas) {
                 this.advect(j, i, cDst, cSrc, vDst, delta);
             }
         }
-        // Calculate divergence
+        // Calculate divergence and iteratively solve pressure
         vDst.divergence(this.div);
+        this.p1.jacobi(this.p0, this.div, -1, 4, 32);
 
         this.showBack = !this.showBack;
     }
@@ -216,6 +228,39 @@ function field(width, height, dimension) {
                 var index = i * dst.width + j;
                 dst.data[index] = (e.x - w.x) + (s.y - n.y);
             }
+        }
+    }
+
+    // Jacobi iterator using b, alpha, beta, and i iterations to solve into
+    // this field. A scratch buffer is provided to minimize memory allocation.
+    this.jacobi = function(scratch, b, alpha, beta, i) {
+        // Ensure after i iterations, final result is in this
+        var writeScratch = (i % 2) == 0;
+
+        for(var l = 0; l < i; l++) {
+            // Reset destination and source
+            var dest = writeScratch ? scratch : this;
+            var src = writeScratch ? this : scratch;
+
+            // Calculate latest value
+            for(var j = 1; j < dest.height - 1; j++) {
+                for(var k = 1; k < dest.width - 1; k++) {
+                    // Sample neighboring squares from source
+                    var index = j * dest.width + k;
+                    var w = src.data[index - 1];
+                    var n = src.data[index - dest.width];
+                    var e = src.data[index + 1];
+                    var s = src.data[index + dest.width];
+
+                    // Compute sample from b field
+                    var alphaB = b.data[index] * alpha;
+
+                    dest.data[index] = (w + n + e + s + alphaB) / beta;
+                }
+            }
+
+            // Swap destination and source
+            writeScratch = !writeScratch;
         }
     }
 
