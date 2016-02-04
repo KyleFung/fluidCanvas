@@ -8,8 +8,8 @@ function fluid(width, height, canvas) {
     this.showBack = true;
 
     // Rendered field
-    // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure
-    this.renderedField = 0;
+    // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
+    this.renderedField = 4;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -29,6 +29,7 @@ function fluid(width, height, canvas) {
     // p0 is for scratch calculations; p1 holds the actual values
     this.p0 = new field(width, height, 1);
     this.p1 = new field(width, height, 1);
+    this.gp = new field(width, height, 2);
 
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
@@ -41,6 +42,7 @@ function fluid(width, height, canvas) {
             this.div.data[index] = 0;
             this.p0.data[index] = 0;
             this.p1.data[index] = 0;
+            this.gp.data[index] = {x:0, y:0};
 
             // Test Setup 1:
             // Circular blob of dye and uniform velocity field to right
@@ -72,6 +74,7 @@ function fluid(width, height, canvas) {
             */
             // End test setup 2
 
+            /*
             // Test Setup 3:
             // Circular blob of dye with a small rotational velocity field
             var dx = j - 70;
@@ -87,8 +90,8 @@ function fluid(width, height, canvas) {
                 this.v1.data[index] = {x:-dy, y:dx};
             }
             // End test setup 3
+            */
 
-            /*
             // Test Setup 4:
             // An exploding velocity field with divergence = 2
             var dx = j;
@@ -98,7 +101,6 @@ function fluid(width, height, canvas) {
                 this.v1.data[index] = {x:dx, y:dy};
             }
             // End test setup 4
-            */
         }
     }
 
@@ -123,6 +125,8 @@ function fluid(width, height, canvas) {
             case 3:
                 src = this.p1;
                 break;
+            case 4:
+                src = this.gp;
             default:
         }
 
@@ -180,6 +184,9 @@ function fluid(width, height, canvas) {
         // Calculate divergence and iteratively solve pressure
         vDst.divergence(this.div);
         this.p1.jacobi(this.p0, this.div, -1, 4, 32);
+
+        // Update gradient of p1 into gp
+        this.p1.gradient(this.gp);
 
         this.showBack = !this.showBack;
     }
@@ -261,6 +268,23 @@ function field(width, height, dimension) {
 
             // Swap destination and source
             writeScratch = !writeScratch;
+        }
+    }
+
+    // Calculates the gradient of this field into dst
+    this.gradient = function(dst) {
+        for(var i = 1; i < dst.height - 1; i++) {
+            for(var j = 1; j < dst.width - 1; j++) {
+                var index = i * dst.width + j;
+                var e = this.data[index + 1];
+                var w = this.data[index - 1];
+                var s = this.data[index + dst.width];
+                var n = this.data[index - dst.width];
+
+                // Calculate the gradient into destination
+                dst.data[index].x = (e - w) / 2.0;
+                dst.data[index].y = (s - n) / 2.0;
+            }
         }
     }
 
