@@ -9,7 +9,7 @@ function fluid(width, height, canvas) {
 
     // Rendered field
     // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
-    this.renderedField = 1;
+    this.renderedField = 0;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -92,6 +92,7 @@ function fluid(width, height, canvas) {
             // End test setup 3
             */
 
+            /*
             // Test Setup 4:
             // An exploding velocity field with divergence = 2
             var dx = j;
@@ -101,8 +102,24 @@ function fluid(width, height, canvas) {
                 this.v1.data[index] = {x:dx, y:dy};
             }
             // End test setup 4
+            */
+
+            // Test setup 5:
+            // A constant velocity field downward and a blob of dye
+            var dx = j - 70;
+            var dy = i - 110;
+            if((dx * dx) + (dy * dy) < 300 && i != 0 && i != this.height - 1) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+
+            this.v0.data[index] = {x:0, y:20};
+            this.v1.data[index] = {x:0, y:20};
         }
     }
+
+    this.v0.updateBoundary(-1.0);
+    this.v1.updateBoundary(-1.0);
 
     this.render = function() {
         this.updateView(1.0);
@@ -173,7 +190,7 @@ function fluid(width, height, canvas) {
 
         // Use jacobi solver to calculate pressure field
         // Magic numbers taken from the discrete laplacian definition
-        this.p1.jacobi(this.p0, this.div, -1, 4, 128);
+        this.p1.jacobi(this.p0, this.div, -1, 4, 128, 1.0);
 
         // Calculate its gradient into gp
         this.p1.gradient(this.gp);
@@ -190,14 +207,17 @@ function fluid(width, height, canvas) {
         var cDst = !this.showBack ? this.c0: this.c1;
         var cSrc = this.showBack ? this.c0: this.c1;
 
-        // Solve non-divergence free velocity for each cell
+        // Enforce no-slip condition
+        vDst.updateBoundary(-1.0);
+        this.project(vDst);
+
+        // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
                 // Advect the concentration field
                 this.advect(j, i, cDst, cSrc, vDst, delta);
             }
         }
-        this.project(vDst);
 
         this.showBack = !this.showBack;
     }
@@ -251,7 +271,7 @@ function field(width, height, dimension) {
 
     // Jacobi iterator using b, alpha, beta, and i iterations to solve into
     // this field. A scratch buffer is provided to minimize memory allocation.
-    this.jacobi = function(scratch, b, alpha, beta, i) {
+    this.jacobi = function(scratch, b, alpha, beta, i, boundary) {
         // Ensure after i iterations, final result is in this
         var writeScratch = (i % 2) == 0;
 
@@ -259,6 +279,9 @@ function field(width, height, dimension) {
             // Reset destination and source
             var dest = writeScratch ? scratch : this;
             var src = writeScratch ? this : scratch;
+
+            // Enforce boundary conditions
+            dest.updateBoundary(boundary);
 
             // Calculate latest value
             for(var j = 1; j < dest.height - 1; j++) {
@@ -284,18 +307,52 @@ function field(width, height, dimension) {
 
     // Calculates the gradient of this field into dst
     this.gradient = function(dst) {
-        for(var i = 1; i < dst.height - 1; i++) {
-            for(var j = 1; j < dst.width - 1; j++) {
+        for(var i = 0; i < dst.height; i++) {
+            for(var j = 0; j < dst.width; j++) {
                 var index = i * dst.width + j;
+                var c = this.data[index];
                 var e = this.data[index + 1];
                 var w = this.data[index - 1];
                 var s = this.data[index + dst.width];
                 var n = this.data[index - dst.width];
 
-                // Calculate the gradient into destination
-                dst.data[index].x = (e - w) / 2.0;
-                dst.data[index].y = (s - n) / 2.0;
+                if(i == 0) {
+                    dst.data[index].y = (s - c);
+                }
+                else if(i == dst.height - 1) {
+                    dst.data[index].y = (c - n);
+                }
+                else {
+                    dst.data[index].y = (s - n) / 2.0;
+                }
+
+                if(j == 0) {
+                    dst.data[index].x = (e - c);
+                }
+                else if(j == dst.width - 1) {
+                    dst.data[index].x = (c - w);
+                }
+                else {
+                    dst.data[index].x = (e - w) / 2.0;
+                }
             }
+        }
+    }
+
+    // Update boundary values to be the value of closest interior cell scaled by k
+    this.updateBoundary = function(k) {
+        // Update top and bottom rows
+        for(var i = 1; i < this.width - 1; i++) {
+            this.data[i] = this.scale(k, this.data[i + this.width]);
+            var index = (this.height - 1) * this.width + i;
+            this.data[index] = this.scale(k, this.data[index - this.width]);
+        }
+        // Update left and right columns
+        for(var i = 1; i < this.height - 1; i++) {
+            var index = i * this.width;
+            this.data[index] = this.scale(k, this.data[index + 1]);
+            index = index + this.width - 1;
+            this.data[index] = this.scale(k, this.data[index - 1]);
         }
     }
 
@@ -314,6 +371,15 @@ function field(width, height, dimension) {
                     this.data[index].y = this.data[index].y - other.data[index].y;
                 }
             }
+        }
+    }
+
+    this.scale = function(k, a) {
+        if(this.dimension == 1) {
+            return k * a;
+        }
+        if(this.dimension == 2) {
+            return {x:k * a.x, y:k * a.y};
         }
     }
 
