@@ -104,6 +104,7 @@ function fluid(width, height, canvas) {
             // End test setup 4
             */
 
+            /*
             // Test setup 5:
             // A constant velocity field downward and a blob of dye
             var dx = j - 70;
@@ -115,6 +116,21 @@ function fluid(width, height, canvas) {
 
             this.v0.data[index] = {x:0, y:20};
             this.v1.data[index] = {x:0, y:20};
+            // End test setup 5
+            */
+
+            // Test setup 6:
+            // A constant velocity field downward and a blob of dye
+            var dx = j - 70;
+            var dy = i - 90;
+            if((dx * dx) + (dy * dy) < 500 && i != 0 && i != this.height - 1) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+
+            this.v0.data[index] = {x:60, y:50};
+            this.v1.data[index] = {x:60, y:50};
+            // End test setup 6
         }
     }
 
@@ -206,6 +222,14 @@ function fluid(width, height, canvas) {
 
         var cDst = !this.showBack ? this.c0: this.c1;
         var cSrc = this.showBack ? this.c0: this.c1;
+
+        // Advect velocity using the velocity field
+        for(var i = 1; i < this.height - 1; i++) {
+            for(var j = 1; j < this.width - 1; j++) {
+                // Advect the concentration field
+                this.advect(j, i, vDst, vSrc, vSrc, delta);
+            }
+        }
 
         // Enforce no-slip condition
         vDst.updateBoundary(-1.0);
