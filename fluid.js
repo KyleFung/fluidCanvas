@@ -366,13 +366,13 @@ function field(width, height, dimension) {
     // Update boundary values to be the value of closest interior cell scaled by k
     this.updateBoundary = function(k) {
         // Update top and bottom rows
-        for(var i = 1; i < this.width - 1; i++) {
+        for(var i = 0; i < this.width; i++) {
             this.data[i] = this.scale(k, this.data[i + this.width]);
             var index = (this.height - 1) * this.width + i;
             this.data[index] = this.scale(k, this.data[index - this.width]);
         }
         // Update left and right columns
-        for(var i = 1; i < this.height - 1; i++) {
+        for(var i = 0; i < this.height; i++) {
             var index = i * this.width;
             this.data[index] = this.scale(k, this.data[index + 1]);
             index = index + this.width - 1;
