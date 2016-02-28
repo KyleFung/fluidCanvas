@@ -31,111 +31,57 @@ function fluid(width, height, canvas) {
     this.p1 = new field(width, height, 1);
     this.gp = new field(width, height, 2);
 
-    for(var i = 0; i < height; i++) {
-        for(var j = 0; j < width; j++) {
-            var index = i * width + j;
-            // Initialize default setup
-            this.c0.data[index] = 0;
-            this.c1.data[index] = 0;
-            this.v0.data[index] = {x:0, y:0};
-            this.v1.data[index] = {x:0, y:0};
-            this.div.data[index] = 0;
-            this.p0.data[index] = 0;
-            this.p1.data[index] = 0;
-            this.gp.data[index] = {x:0, y:0};
+    // Zero out all the fields
+    this.c0.fillZero();
+    this.c1.fillZero();
+    this.div.fillZero();
+    this.p0.fillZero();
+    this.p1.fillZero();
+    this.v0.fillZero();
+    this.v1.fillZero();
+    this.gp.fillZero();
 
-            // Test Setup 1:
-            // Circular blob of dye and uniform velocity field to right
-            /*
-            var dx = j - 70;
-            var dy = i - 90;
-            if((dx * dx) + (dy * dy) < 400) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
-            }
-            this.v0.data[index] = {x:1, y:0};
-            this.v1.data[index] = {x:1, y:0};
-            */
-            // End test setup 1
-
-            // Test Setup 2:
-            // Circular blob of dye with a rotational velocity field (flushing toilet)
-            /*
-            var dx = j - 70;
-            var dy = i - 90;
-            if((dx * dx) + (dy * dy) < 300) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
-            }
+    // Fill in u component of vector fields
+    for(var i = 0; i < this.v0.u.height; i++) {
+        for(var j = 0; j < this.v0.u.width; j++) {
+            var index = i * this.v0.u.width + j;
             var dx = j - 60;
             var dy = i - 60;
-            this.v0.data[index] = {x:-dy, y:dx};
-            this.v1.data[index] = {x:-dy, y:dx};
-            */
-            // End test setup 2
-
-            /*
-            // Test Setup 3:
-            // Circular blob of dye with a small rotational velocity field
-            var dx = j - 70;
-            var dy = i - 90;
-            if((dx * dx) + (dy * dy) < 300) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
+            if(dx * dx + dy * dy < 500) {
+                this.v0.u.data[index] = -dy;
+                this.v1.u.data[index] = -dy;
             }
-            var dx = j - 60;
-            var dy = i - 60;
-            if((dx * dx) + (dy * dy) < 500) {
-                this.v0.data[index] = {x:-dy, y:dx};
-                this.v1.data[index] = {x:-dy, y:dx};
-            }
-            // End test setup 3
-            */
-
-            /*
-            // Test Setup 4:
-            // An exploding velocity field with divergence = 2
-            var dx = j;
-            var dy = i;
-            if((dx * dx) + (dy * dy) < 500) {
-                this.v0.data[index] = {x:dx, y:dy};
-                this.v1.data[index] = {x:dx, y:dy};
-            }
-            // End test setup 4
-            */
-
-            /*
-            // Test setup 5:
-            // A constant velocity field downward and a blob of dye
-            var dx = j - 70;
-            var dy = i - 110;
-            if((dx * dx) + (dy * dy) < 300 && i != 0 && i != this.height - 1) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
-            }
-
-            this.v0.data[index] = {x:0, y:20};
-            this.v1.data[index] = {x:0, y:20};
-            // End test setup 5
-            */
-
-            // Test setup 6:
-            // A constant velocity field downward and a blob of dye
-            var dx = j - 70;
-            var dy = i - 90;
-            if((dx * dx) + (dy * dy) < 500 && i != 0 && i != this.height - 1) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
-            }
-
-            this.v0.data[index] = {x:60, y:50};
-            this.v1.data[index] = {x:60, y:50};
-            // End test setup 6
         }
     }
 
-    this.v0.updateBoundary(-1.0);
-    this.v1.updateBoundary(-1.0);
+    // Fill in v component of vector fields
+    for(var i = 0; i < this.v0.v.height; i++) {
+        for(var j = 0; j < this.v0.v.width; j++) {
+            var index = i * this.v0.v.width + j;
+            var dx = j - 60;
+            var dy = i - 60;
+            if(dx * dx + dy * dy < 500) {
+                this.v0.v.data[index] = dx;
+                this.v1.v.data[index] = dx;
+            }
+        }
+    }
+
+    // Fill in scalar fields
+    for(var i = 0; i < height; i++) {
+        for(var j = 0; j < width; j++) {
+            var index = i * width + j;
+            var dx = j - 70;
+            var dy = i - 90;
+            if((dx * dx) + (dy * dy) < 300) {
+                this.c0.data[index] = 1.0;
+                this.c1.data[index] = 1.0;
+            }
+        }
+    }
+
+    this.v0.updateBoundary(0);
+    this.v1.updateBoundary(0);
 
     this.render = function() {
         this.updateView(1.0);
@@ -166,13 +112,13 @@ function fluid(width, height, canvas) {
         // Copy src into the view buffer
         for(var i = 0; i < src.height; i++) {
             for(var j = 0; j < src.width; j++) {
-                var index = i * src.width + j;
                 // Decide mapping based on field type
                 if(src.dimension == 2) {
-                    this.updatePixel(j, i, scale * (src.data[index].x * src.data[index].x +
-                                            src.data[index].y * src.data[index].y));
+                    var v = src.sample(j + 0.5, i + 0.5);
+                    this.updatePixel(j, i, scale * (v.x * v.x + v.y * v.y));
                 }
                 else {
+                    var index = i * src.width + j;
                     this.updatePixel(j, i, scale * Math.abs(src.data[index]));
                 }
             }
@@ -190,13 +136,13 @@ function fluid(width, height, canvas) {
     // Advects a quantity at (x+0.5, y+0.5) in src using vel into dst
     this.advect = function(x, y, dst, src, vel, delta) {
         // Integrate backwards in time by solving for (x0,y0)
-        var u = vel.data[y * this.width + x];
+        var u = vel.sample(x, y);
         var x0 = x - delta * u.x + 0.5;
         var y0 = y - delta * u.y + 0.5;
 
         // Solve q1(x,y) by interpolating for q0(x0,y0)
         var result = src.sample(x0, y0);
-        dst.data[y * this.width + x] = result;
+        dst.data[Math.floor(y) * dst.width + Math.floor(x)] = result;
     }
 
     // Project the given velocity field onto its divergence free component
@@ -224,16 +170,10 @@ function fluid(width, height, canvas) {
         var cSrc = this.showBack ? this.c0: this.c1;
 
         // Advect velocity using the velocity field
-        for(var i = 1; i < this.height - 1; i++) {
-            for(var j = 1; j < this.width - 1; j++) {
-                // Advect the concentration field
-                this.advect(j, i, vDst, vSrc, vSrc, delta);
-            }
-        }
 
         // Enforce no-slip condition
-        vDst.updateBoundary(-1.0);
-        this.project(vDst);
+        vDst.updateBoundary(0);
+        //this.project(vDst);
 
         // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
@@ -248,16 +188,33 @@ function fluid(width, height, canvas) {
 }
 
 function field(width, height, dimension) {
-    this.data = new Array(width * height);
     this.width = width;
     this.height = height;
     this.dimension = dimension;
+
+    if(dimension == 1) {
+        this.data = new Array(width * height);
+    }
+    if(dimension == 2) {
+        this.u = new field(width + 1, height, 1);
+        this.v = new field(width, height + 1, 1);
+    }
 
     this.sample = function(x, y) {
         // Anything outside of the inner box is zero
         if(x < 0.5 || x >= this.width - 0.5) {return this.zero();}
         if(y < 0.5 || y >= this.height - 0.5) {return this.zero();}
 
+        // Sample according to the staggered grid setup
+        if(this.dimension == 1) {
+            return this.centerSample(x, y);
+        }
+        if(this.dimension == 2) {
+            return this.edgeSample(x, y);
+        }
+    }
+
+    this.centerSample = function(x, y) {
         var topLeft = Math.round(y - 1) * this.width + Math.round(x - 1);
         var topRight = topLeft + 1;
         var btmLeft = topLeft + this.width;
@@ -271,6 +228,26 @@ function field(width, height, dimension) {
         var btmVal = this.lerp(kx, this.data[btmLeft], this.data[btmRight]);
 
         return this.lerp(ky, topVal, btmVal);
+    }
+
+    this.edgeSample = function(x, y) {
+        // Sample the u array to get horizontal component
+        var xu = Math.floor(x) - 1 + 0.5;
+        var yu = Math.round(y) - 1 + 0.5;
+        var kxu = x - Math.floor(x);
+        var kyu = y - Math.round(y) + 0.5;
+
+        var u = this.u.centerSample(xu + kxu, yu + kyu);
+
+        // Sample the v array to get vertical component
+        var yv = Math.floor(y) + 0.5;
+        var xv = Math.round(x) - 1 + 0.5;
+        var kxv = x - Math.round(x) + 0.5;
+        var kyv = y - Math.floor(y);
+
+        var v = this.v.centerSample(xv + kxv, yv + kyv);
+
+        return {x:u, y:v};
     }
 
     // Calculate the divergence of field into dst
@@ -365,6 +342,15 @@ function field(width, height, dimension) {
 
     // Update boundary values to be the value of closest interior cell scaled by k
     this.updateBoundary = function(k) {
+        if(this.dimension == 1) {
+            this.updateCenters(k);
+        }
+        if(this.dimension == 2) {
+            this.updateEdges(k);
+        }
+    }
+
+    this.updateCenters = function(k) {
         // Update top and bottom rows
         for(var i = 0; i < this.width; i++) {
             this.data[i] = this.scale(k, this.data[i + this.width]);
@@ -377,6 +363,27 @@ function field(width, height, dimension) {
             this.data[index] = this.scale(k, this.data[index + 1]);
             index = index + this.width - 1;
             this.data[index] = this.scale(k, this.data[index - 1]);
+        }
+    }
+
+    this.updateEdges = function(k) {
+        // Outer edges of staggered fields are defined to be 0
+        this.u.updateCenters(0);
+        this.v.updateCenters(0);
+
+        // Update top and bottom rows of v field
+        for(var i = 1; i < this.v.width - 1; i++) {
+            var index = i + this.v.width;
+            this.v.data[index] = k * this.v.data[index + this.width];
+            index = (this.v.height - 2) * this.v.width + i;
+            this.v.data[index] = k * this.v.data[index - this.width];
+        }
+        // Update left and right columns of u field
+        for(var i = 1; i < this.u.height - 1; i++) {
+            var index = i * this.u.width + 1;
+            this.u.data[index] = k * this.u.data[index + 1];
+            index = i * this.u.width + this.u.width - 2;
+            this.u.data[index] = k * this.u.data[index - 1];
         }
     }
 
@@ -422,6 +429,22 @@ function field(width, height, dimension) {
             var x = (1 - k) * a.x + (k) * b.x;
             var y = (1 - k) * a.y + (k) * b.y;
             return {x:x, y:y};
+        }
+    }
+
+    this.fillZero = function() {
+        if(dimension == 1) {
+            for(var i = 0; i < this.height; i++) {
+                for(var j = 0; j < this.width; j++) {
+                    var index = i * this.width + j;
+                    this.data[index] = 0;
+                }
+            }
+        }
+
+        if(dimension == 2) {
+            this.u.fillZero();
+            this.v.fillZero();
         }
     }
 }
