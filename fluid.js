@@ -133,12 +133,12 @@ function fluid(width, height, canvas) {
         this.view.data[index + 3] = 255;
     }
 
-    // Advects a quantity at (x+0.5, y+0.5) in src using vel into dst
+    // Advects a quantity at (x, y) in src using vel into dst
     this.advect = function(x, y, dst, src, vel, delta) {
         // Integrate backwards in time by solving for (x0,y0)
         var u = vel.sample(x, y);
-        var x0 = x - delta * u.x + 0.5;
-        var y0 = y - delta * u.y + 0.5;
+        var x0 = x - delta * u.x;
+        var y0 = y - delta * u.y;
 
         // Solve q1(x,y) by interpolating for q0(x0,y0)
         var result = src.sample(x0, y0);
@@ -179,7 +179,7 @@ function fluid(width, height, canvas) {
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
                 // Advect the concentration field
-                this.advect(j, i, cDst, cSrc, vDst, delta);
+                this.advect(j + 0.5, i + 0.5, cDst, cSrc, vDst, delta);
             }
         }
 
@@ -232,8 +232,8 @@ function field(width, height, dimension) {
 
     this.edgeSample = function(x, y) {
         // Sample the u array to get horizontal component
-        var xu = Math.floor(x) - 1 + 0.5;
-        var yu = Math.round(y) - 1 + 0.5;
+        var xu = Math.floor(x) + 0.5;
+        var yu = Math.round(y) - 1;
         var kxu = x - Math.floor(x);
         var kyu = y - Math.round(y) + 0.5;
 
@@ -241,7 +241,7 @@ function field(width, height, dimension) {
 
         // Sample the v array to get vertical component
         var yv = Math.floor(y) + 0.5;
-        var xv = Math.round(x) - 1 + 0.5;
+        var xv = Math.round(x) - 1;
         var kxv = x - Math.round(x) + 0.5;
         var kyv = y - Math.floor(y);
 
