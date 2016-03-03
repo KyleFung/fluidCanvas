@@ -45,9 +45,9 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < this.v0.u.height; i++) {
         for(var j = 0; j < this.v0.u.width; j++) {
             var index = i * this.v0.u.width + j;
-            var dx = j - 60;
-            var dy = i - 60;
-            if(dx * dx + dy * dy < 500) {
+            var dx = j - 30;
+            var dy = i - 30;
+            if(dx * dx + dy * dy <= 300) {
                 this.v0.u.data[index] = -dy;
                 this.v1.u.data[index] = -dy;
             }
@@ -58,9 +58,9 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < this.v0.v.height; i++) {
         for(var j = 0; j < this.v0.v.width; j++) {
             var index = i * this.v0.v.width + j;
-            var dx = j - 60;
-            var dy = i - 60;
-            if(dx * dx + dy * dy < 500) {
+            var dx = j - 30;
+            var dy = i - 30;
+            if(dx * dx + dy * dy <= 300) {
                 this.v0.v.data[index] = dx;
                 this.v1.v.data[index] = dx;
             }
@@ -71,9 +71,9 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
             var index = i * width + j;
-            var dx = j - 70;
-            var dy = i - 90;
-            if((dx * dx) + (dy * dy) < 300) {
+            var dx = j - 30;
+            var dy = i - 30;
+            if(dx * dx + dy * dy < 300) {
                 this.c0.data[index] = 1.0;
                 this.c1.data[index] = 1.0;
             }
@@ -179,6 +179,9 @@ function fluid(width, height, canvas) {
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
                 // Advect the concentration field
+                if(i == 50 && j == 50) {
+                    var stuff = 0;
+                }
                 this.advect(j + 0.5, i + 0.5, cDst, cSrc, vDst, delta);
             }
         }
@@ -202,8 +205,8 @@ function field(width, height, dimension) {
 
     this.sample = function(x, y) {
         // Anything outside of the inner box is zero
-        if(x < 0.5 || x >= this.width - 0.5) {return this.zero();}
-        if(y < 0.5 || y >= this.height - 0.5) {return this.zero();}
+        if(x < 0.5 || x > this.width - 0.5) {return this.zero();}
+        if(y < 0.5 || y > this.height - 0.5) {return this.zero();}
 
         // Sample according to the staggered grid setup
         if(this.dimension == 1) {
@@ -231,23 +234,46 @@ function field(width, height, dimension) {
     }
 
     this.edgeSample = function(x, y) {
+        var result = {x:0, y:0};
         // Sample the u array to get horizontal component
-        var xu = Math.floor(x) + 0.5;
-        var yu = Math.round(y) - 1;
-        var kxu = x - Math.floor(x);
-        var kyu = y - Math.round(y) + 0.5;
+        // Case for which y values are not on the edge of u field
+        if(y != 0.5 && y != this.u.height - 0.5) {
+            var xu = Math.floor(x) + 0.5;
+            var yu = Math.round(y) - 1 + 0.5;
+            var kxu = x - Math.floor(x);
+            var kyu = y - Math.round(y) + 0.5;
 
-        var u = this.u.centerSample(xu + kxu, yu + kyu);
+            result.x = this.u.centerSample(xu + kxu, yu + kyu);
+        }
+        else {
+            var l = Math.floor(x);
+            var r = l + 1;
+            var base = Math.floor(y) * this.u.width;
+            var k = x - l;
+
+            result.x = this.u.lerp(k, this.u.data[base + l], this.u.data[base + r]);
+        }
 
         // Sample the v array to get vertical component
-        var yv = Math.floor(y) + 0.5;
-        var xv = Math.round(x) - 1;
-        var kxv = x - Math.round(x) + 0.5;
-        var kyv = y - Math.floor(y);
 
-        var v = this.v.centerSample(xv + kxv, yv + kyv);
+        // Case for which x values are not on the edge of v field
+        if(x != 0.5 && x != this.v.width - 0.5) {
+            var yv = Math.floor(y) + 0.5;
+            var xv = Math.round(x) - 1 + 0.5;
+            var kxv = x - Math.round(x) + 0.5;
+            var kyv = y - Math.floor(y);
 
-        return {x:u, y:v};
+            result.y = this.v.centerSample(xv + kxv, yv + kyv);
+        }
+        else {
+            var t = Math.floor(y);
+            var base = t * this.v.width + Math.floor(x);
+            var k = y - t;
+
+            result.y = this.v.lerp(k, this.v.data[base], this.v.data[base + this.v.width]);
+        }
+
+        return result;
     }
 
     // Calculate the divergence of field into dst
