@@ -134,14 +134,14 @@ function fluid(width, height, canvas) {
     }
 
     // Advects a quantity at (x, y) in src using vel into dst
-    this.advect = function(x, y, dst, src, vel, delta) {
+    this.advect = function(x, y, dst, src, vel, delta, offsetX, offsetY) {
         // Integrate backwards in time by solving for (x0,y0)
         var u = vel.sample(x, y);
         var x0 = x - delta * u.x;
         var y0 = y - delta * u.y;
 
         // Solve q1(x,y) by interpolating for q0(x0,y0)
-        var result = src.sample(x0, y0);
+        var result = src.sample(x0 + offsetX, y0 + offsetY);
         dst.data[Math.floor(y) * dst.width + Math.floor(x)] = result;
     }
 
@@ -170,6 +170,16 @@ function fluid(width, height, canvas) {
         var cSrc = this.showBack ? this.c0: this.c1;
 
         // Advect velocity using the velocity field
+        for(var i = 1; i < vDst.u.height - 1; i++) {
+            for(var j = 1; j < vDst.u.width - 1; j++) {
+                this.advect(j, i + 0.5, vDst.u, vSrc.u, vSrc, delta, 0.5, 0);
+            }
+        }
+        for(var i = 1; i < vDst.v.height - 1; i++) {
+            for(var j = 1; j < vDst.v.width - 1; j++) {
+                this.advect(j + 0.5, i, vDst.v, vSrc.v, vSrc, delta, 0, 0.5);
+            }
+        }
 
         // Enforce no-slip condition
         vDst.updateBoundary(0);
@@ -179,10 +189,7 @@ function fluid(width, height, canvas) {
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
                 // Advect the concentration field
-                if(i == 50 && j == 50) {
-                    var stuff = 0;
-                }
-                this.advect(j + 0.5, i + 0.5, cDst, cSrc, vDst, delta);
+                this.advect(j + 0.5, i + 0.5, cDst, cSrc, vDst, delta, 0, 0);
             }
         }
 
