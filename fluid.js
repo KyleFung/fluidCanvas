@@ -47,9 +47,9 @@ function fluid(width, height, canvas) {
             var index = i * this.v0.u.width + j;
             var dx = j - 30;
             var dy = i - 30;
-            if(dx * dx + dy * dy <= 300) {
-                this.v0.u.data[index] = -dy;
-                this.v1.u.data[index] = -dy;
+            if(dx * dx + dy * dy <= 500) {
+                this.v0.u.data[index] = -50;
+                this.v1.u.data[index] = -50;
             }
         }
     }
@@ -60,9 +60,9 @@ function fluid(width, height, canvas) {
             var index = i * this.v0.v.width + j;
             var dx = j - 30;
             var dy = i - 30;
-            if(dx * dx + dy * dy <= 300) {
-                this.v0.v.data[index] = dx;
-                this.v1.v.data[index] = dx;
+            if(dx * dx + dy * dy <= 500) {
+                this.v0.v.data[index] = 0;
+                this.v1.v.data[index] = 0;
             }
         }
     }
@@ -183,7 +183,7 @@ function fluid(width, height, canvas) {
 
         // Enforce no-slip condition
         vDst.updateBoundary(0);
-        //this.project(vDst);
+        this.project(vDst);
 
         // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
@@ -262,7 +262,6 @@ function field(width, height, dimension) {
         }
 
         // Sample the v array to get vertical component
-
         // Case for which x values are not on the edge of v field
         if(x != 0.5 && x != this.v.width - 0.5) {
             var yv = Math.floor(y) + 0.5;
@@ -288,17 +287,12 @@ function field(width, height, dimension) {
     this.divergence = function(dst) {
         for(var i = 0; i < dst.height; i++) {
             for(var j = 0; j < dst.width; j++) {
-                // Map index values into R2 values
-                var x = j + 0.5;
-                var y = i + 0.5;
-                // Sample around the point (x,y)
-                var s = this.sample(x, y + 0.5);
-                var n = this.sample(x, y - 0.5);
-                var e = this.sample(x + 0.5, y);
-                var w = this.sample(x - 0.5, y);
+                var n = this.v.data[i * this.v.width + j];
+                var s = this.v.data[(i + 1) * this.v.width + j];
+                var w = this.u.data[i * this.u.width + j];
+                var e = this.u.data[i * this.u.width + j + 1];
 
-                var index = i * dst.width + j;
-                dst.data[index] = (e.x - w.x) + (s.y - n.y);
+                dst.data[i * dst.width + j] = (e - w) + (s - n);
             }
         }
     }
@@ -341,34 +335,21 @@ function field(width, height, dimension) {
 
     // Calculates the gradient of this field into dst
     this.gradient = function(dst) {
-        for(var i = 0; i < dst.height; i++) {
-            for(var j = 0; j < dst.width; j++) {
-                var index = i * dst.width + j;
-                var c = this.data[index];
-                var e = this.data[index + 1];
-                var w = this.data[index - 1];
-                var s = this.data[index + dst.width];
-                var n = this.data[index - dst.width];
-
-                if(i == 0) {
-                    dst.data[index].y = (s - c);
-                }
-                else if(i == dst.height - 1) {
-                    dst.data[index].y = (c - n);
-                }
-                else {
-                    dst.data[index].y = (s - n) / 2.0;
-                }
-
-                if(j == 0) {
-                    dst.data[index].x = (e - c);
-                }
-                else if(j == dst.width - 1) {
-                    dst.data[index].x = (c - w);
-                }
-                else {
-                    dst.data[index].x = (e - w) / 2.0;
-                }
+        dst.fillZero();
+        // Write into u field
+        for(var i = 0; i < dst.u.height; i++) {
+            for(var j = 1; j < dst.u.width - 1; j++) {
+                var l = this.data[i * this.width + j - 1];
+                var r = this.data[i * this.width + j];
+                dst.u.data[i * dst.u.width + j] = r - l;
+            }
+        }
+        // Write into v field
+        for(var i = 1; i < dst.v.height - 1; i++) {
+            for(var j = 0; j < dst.v.width; j++) {
+                var n = this.data[(i - 1) * this.width + j];
+                var s = this.data[i * this.width + j];
+                dst.v.data[i * dst.v.width + j] = s - n;
             }
         }
     }
@@ -423,18 +404,17 @@ function field(width, height, dimension) {
     // Calculate (this - other) into this
     this.subtract = function(other) {
         // Loop through and subtract element by element
-        for(var i = 0; i < this.height; i++) {
-            for(var j = 0; j < this.width; j++) {
-                var index = i * this.width + j;
-                // Actual subtraction depends on field type
-                if(this.dimension == 1) {
+        if(this.dimension == 1) {
+            for(var i = 0; i < this.height; i++) {
+                for(var j = 0; j < this.width; j++) {
+                    var index = i * this.width + j;
                     this.data[index] = this.data[index] - other.data[index];
                 }
-                if(this.dimension == 2) {
-                    this.data[index].x = this.data[index].x - other.data[index].x;
-                    this.data[index].y = this.data[index].y - other.data[index].y;
-                }
             }
+        }
+        if(this.dimension == 2) {
+            this.u.subtract(other.u);
+            this.v.subtract(other.v);
         }
     }
 
