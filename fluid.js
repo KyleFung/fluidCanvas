@@ -18,6 +18,10 @@ function fluid(width, height, canvas) {
     this.c0 = new field(width, height, 1);
     this.c1 = new field(width, height, 1);
 
+    // Marker grid (0 = solid, 1 = liquid, 2 = air)
+    this.m0 = new field(width, height, 1);
+    this.m1 = new field(width, height, 1);
+
     // Velocity
     this.v0 = new field(width, height, 2);
     this.v1 = new field(width, height, 2);
@@ -71,15 +75,25 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < height; i++) {
         for(var j = 0; j < width; j++) {
             var index = i * width + j;
+            // Concentration
             var dx = j - 30;
             var dy = i - 30;
             if(dx * dx + dy * dy < 300) {
                 this.c0.data[index] = 1.0;
                 this.c1.data[index] = 1.0;
             }
+
+            // Marker
+            this.m0.data[index] = 1;
+            this.m1.data[index] = 1;
         }
     }
 
+    // Mark solid walls accordingly
+    this.m0.updateBoundary(0);
+    this.m1.updateBoundary(0);
+
+    // Enforce no slip condition
     this.v0.updateBoundary(0);
     this.v1.updateBoundary(0);
 
@@ -169,15 +183,30 @@ function fluid(width, height, canvas) {
         var cDst = !this.showBack ? this.c0: this.c1;
         var cSrc = this.showBack ? this.c0: this.c1;
 
+        var mDst = !this.showBack ? this.m0: this.m1;
+        var mSrc = this.showBack ? this.m0: this.m1;
+
         // Advect velocity using the velocity field
         for(var i = 1; i < vDst.u.height - 1; i++) {
             for(var j = 1; j < vDst.u.width - 1; j++) {
-                this.advect(j, i + 0.5, vDst.u, vSrc.u, vSrc, delta, 0.5, 0);
+                // Handle liquid to liquid boundaries
+                if(mSrc.getBoundary(j, i + 0.5) == 1) {
+                    this.advect(j, i + 0.5, vDst.u, vSrc.u, vSrc, delta, 0.5, 0);
+                }
+                else {
+                    vDst.u.data[i * vDst.u.width + j] = 0;
+                }
             }
         }
         for(var i = 1; i < vDst.v.height - 1; i++) {
             for(var j = 1; j < vDst.v.width - 1; j++) {
-                this.advect(j + 0.5, i, vDst.v, vSrc.v, vSrc, delta, 0, 0.5);
+                // Handle liquid to liquid boundaries
+                if(mSrc.getBoundary(j + 0.5, i) == 1) {
+                    this.advect(j + 0.5, i, vDst.v, vSrc.v, vSrc, delta, 0, 0.5);
+                }
+                else {
+                    vDst.v.data[i * vDst.v.width + j] = 0;
+                }
             }
         }
 
@@ -361,6 +390,33 @@ function field(width, height, dimension) {
         }
         if(this.dimension == 2) {
             this.updateEdges(k);
+        }
+    }
+
+    // Only applies to marker grid. It returns the interface type at the given coordinate
+    // Solid boundary = 0, Liquid boundary = 1;
+    this.getBoundary = function(x, y) {
+        // Horizonal boundary case
+        if(y - Math.floor(y) != 0) {
+            var r = Math.floor(y) * this.width + Math.floor(x);
+            var l = r - 1;
+            // This is a solid boundary if there are any solids on interface
+            if(this.data[r] == 0 || this.data[l] == 0) {
+                return 0;
+            }
+            // Otherwise this is a purely liquid to liquid interface
+            return 1;
+        }
+        // Vertical boundary case
+        if(x - Math.floor(x) != 0) {
+            var b = Math.floor(y) * this.width + Math.floor(x);
+            var t = b - this.width;
+            // This is a solid boundary if there are any solids on interface
+            if(this.data[b] == 0 || this.data[t] == 0) {
+                return 0;
+            }
+            // Otherwise this is a purely liquid to liquid interface
+            return 1;
         }
     }
 
