@@ -166,13 +166,14 @@ function fluid(width, height, canvas) {
     }
 
     // Project the given velocity field onto its divergence free component
-    this.project = function(vel) {
+    // Marker field given to represent free surface
+    this.project = function(vel, marker) {
         // Recompute divergence of vel
         vel.divergence(this.div);
 
         // Use jacobi solver to calculate pressure field
         // Magic numbers taken from the discrete laplacian definition
-        this.p1.jacobi(this.p0, this.div, -1, 4, 128, 1.0);
+        this.p1.jacobi(this.p0, this.div, -1, 4, 128, 1.0, marker);
 
         // Calculate its gradient into gp
         this.p1.gradient(this.gp);
@@ -192,12 +193,16 @@ function fluid(width, height, canvas) {
         var mDst = !this.showBack ? this.m0: this.m1;
         var mSrc = this.showBack ? this.m0: this.m1;
 
+        // Extrapolate the source velocity field
+        vSrc.extrapolate(this.extV0, mSrc, this.extV1);
+
         // Advect velocity using the velocity field
         for(var i = 1; i < vDst.u.height - 1; i++) {
             for(var j = 1; j < vDst.u.width - 1; j++) {
                 // Handle liquid to liquid boundaries
                 if(mSrc.getBoundary(j, i + 0.5) == 1) {
-                    this.advect(j, i + 0.5, vDst.u, vSrc.u, vSrc, delta, 0.5, 0);
+                    this.advect(j, i + 0.5, vDst.u, this.extV0.u,
+                                this.extV0, delta, 0.5, 0);
                 }
                 else {
                     vDst.u.data[i * vDst.u.width + j] = 0;
@@ -208,7 +213,8 @@ function fluid(width, height, canvas) {
             for(var j = 1; j < vDst.v.width - 1; j++) {
                 // Handle liquid to liquid boundaries
                 if(mSrc.getBoundary(j + 0.5, i) == 1) {
-                    this.advect(j + 0.5, i, vDst.v, vSrc.v, vSrc, delta, 0, 0.5);
+                    this.advect(j + 0.5, i, vDst.v, this.extV0.v,
+                                this.extV0, delta, 0, 0.5);
                 }
                 else {
                     vDst.v.data[i * vDst.v.width + j] = 0;
@@ -218,7 +224,7 @@ function fluid(width, height, canvas) {
 
         // Enforce no-slip condition
         vDst.updateBoundary(0);
-        this.project(vDst);
+        this.project(vDst, mSrc);
 
         // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
@@ -334,7 +340,7 @@ function field(width, height, dimension) {
 
     // Jacobi iterator using b, alpha, beta, and i iterations to solve into
     // this field. A scratch buffer is provided to minimize memory allocation.
-    this.jacobi = function(scratch, b, alpha, beta, i, boundary) {
+    this.jacobi = function(scratch, b, alpha, beta, i, boundary, marker) {
         // Ensure after i iterations, final result is in this
         var writeScratch = (i % 2) == 0;
 
@@ -343,8 +349,19 @@ function field(width, height, dimension) {
             var dest = writeScratch ? scratch : this;
             var src = writeScratch ? this : scratch;
 
-            // Enforce boundary conditions
+            // Enforce boundary conditions on outside wall
             dest.updateBoundary(boundary);
+
+            // Enforce boundary conditions for air to liquid boundaries
+            for(var i = 0; i < dest.height - 1; i++) {
+                for(var j = 0; j < dest.width - 1; j++) {
+                    var index = i * dest.height + j;
+                    // Where there's air, there's 0 pressure
+                    if(marker[index] == 2) {
+                        dest.data[index] = 0;
+                    }
+                }
+            }
 
             // Calculate latest value
             for(var j = 1; j < dest.height - 1; j++) {
