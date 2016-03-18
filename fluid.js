@@ -26,6 +26,10 @@ function fluid(width, height, canvas) {
     this.v0 = new field(width, height, 2);
     this.v1 = new field(width, height, 2);
 
+    // Extralopated velocity
+    this.extV0 = new field(width, height, 2);
+    this.extV1 = new field(width, height, 2);
+
     // Divergence of velocity
     this.div = new field(width, height, 1);
 
@@ -44,6 +48,8 @@ function fluid(width, height, canvas) {
     this.v0.fillZero();
     this.v1.fillZero();
     this.gp.fillZero();
+    this.extV0.fillZero();
+    this.extV1.fillZero();
 
     // Fill in u component of vector fields
     for(var i = 0; i < this.v0.u.height; i++) {
@@ -394,7 +400,7 @@ function field(width, height, dimension) {
     }
 
     // Only applies to marker grid. It returns the interface type at the given coordinate
-    // Solid boundary = 0, Liquid boundary = 1;
+    // Solid boundary = 0, Liquid boundary = 1, Air to air = 2;
     this.getBoundary = function(x, y) {
         // Horizonal boundary case
         if(y - Math.floor(y) != 0) {
@@ -403,6 +409,10 @@ function field(width, height, dimension) {
             // This is a solid boundary if there are any solids on interface
             if(this.data[r] == 0 || this.data[l] == 0) {
                 return 0;
+            }
+            // This is an air to air boundary if both sides are air
+            if(this.data[r] == 2 && this.data[l] == 2) {
+                return 2;
             }
             // Otherwise this is a purely liquid to liquid interface
             return 1;
@@ -414,6 +424,10 @@ function field(width, height, dimension) {
             // This is a solid boundary if there are any solids on interface
             if(this.data[b] == 0 || this.data[t] == 0) {
                 return 0;
+            }
+            // This is an air to air boundary if both sides are air
+            if(this.data[b] == 2 && this.data[t] == 2) {
+                return 2;
             }
             // Otherwise this is a purely liquid to liquid interface
             return 1;
@@ -480,6 +494,123 @@ function field(width, height, dimension) {
         }
         if(this.dimension == 2) {
             return {x:k * a.x, y:k * a.y};
+        }
+    }
+
+    this.extrapolate = function(dst, stencil, scratch) {
+        // Initialize dst (the 0th iteration of this extrapolation)
+        dst.fillZero();
+        for(var i = 1; i < this.u.height - 1; i++) {
+            for(var j = 1; j < this.u.width - 1; j++) {
+                var boundaryType = stencil.getBoundary(j, i + 0.5);
+                // If this velocity is between air cells, set it as NaN
+                var index = i * this.u.width + j;
+                if(boundaryType == 2) {
+                    dst.u.data[index] = Number.NaN;
+                }
+                // If this velocity is between involves a solid, set is as 0
+                else if(boundaryType == 0) {
+                    dst.u.data[index] = 0;
+                }
+                // If this velocity is between liquid cells, extract it from u
+                else {
+                    dst.u.data[index] = this.u.data[index];
+                }
+            }
+        }
+        for(var i = 1; i < this.v.height - 1; i++) {
+            for(var j = 1; j < this.v.width - 1; j++) {
+                var boundaryType = stencil.getBoundary(j + 0.5, i);
+                // If this velocity is between air cells, set it as NaN
+                var index = i * this.v.width + j;
+                if(boundaryType == 2) {
+                    dst.v.data[index] = Number.NaN;
+                }
+                // If this velocity is between involves a solid, set is as 0
+                else if(boundaryType == 0) {
+                    dst.v.data[index] = 0;
+                }
+                // If this velocity is between liquid cells, extract it from u
+                else {
+                    dst.v.data[index] = this.v.data[index];
+                }
+            }
+        }
+
+        // Propogate numbers through cells 5 times
+        var write = dst;
+        var read = scratch;
+        for(var l = 0; l < 5; l++) {
+            write = (write == dst) ? scratch : dst;
+            read = (write == dst) ? scratch : dst;
+            for(var i = 1; i < this.u.height - 1; i++) {
+                for(var j = 1; j < this.u.width - 1; j++) {
+                    var index = i * this.u.width + j;
+                    if(isNaN(read.u.data[index])) {
+                        var n = read.u.data[index - this.u.width];
+                        var s = read.u.data[index + this.u.width];
+                        var e = read.u.data[index + 1];
+                        var w = read.u.data[index - 1];
+
+                        // Count number of valid neighbors
+                        var k = 0;
+                        if(!isNaN(n)) k++;
+                        if(!isNaN(s)) k++;
+                        if(!isNaN(e)) k++;
+                        if(!isNaN(w)) k++;
+
+                        // If 0, do nothing and set it as NaN
+                        if(k == 0) {
+                            write.u.data[index] = Number.NaN;
+                        }
+                        // If not 0, set value to average
+                        else {
+                            n = (isNaN(n)) ? 0 : n;
+                            s = (isNaN(s)) ? 0 : s;
+                            e = (isNaN(e)) ? 0 : e;
+                            w = (isNaN(w)) ? 0 : w;
+                            write.u.data[index] = (n + s + w + e) / k;
+                        }
+                    }
+                    else {
+                        write.u.data[index] = read.u.data[index];
+                    }
+                }
+            }
+            for(var i = 1; i < this.v.height - 1; i++) {
+                for(var j = 1; j < this.v.width - 1; j++) {
+                    var index = i * this.v.width + j;
+                    if(isNaN(read.v.data[index])) {
+                        var n = read.v.data[index - this.v.width];
+                        var s = read.v.data[index + this.v.width];
+                        var e = read.v.data[index + 1];
+                        var w = read.v.data[index - 1];
+
+                        // Count number of valid neighbors
+                        var k = 0;
+                        if(!isNaN(n)) k++;
+                        if(!isNaN(s)) k++;
+                        if(!isNaN(e)) k++;
+                        if(!isNaN(w)) k++;
+
+                        // If 0, do nothing and set it as NaN
+                        if(k == 0) {
+                            write.v.data[index] = Number.NaN;
+                        }
+                        // If not 0, set value to average
+                        else {
+                            n = (isNaN(n)) ? 0 : n;
+                            s = (isNaN(s)) ? 0 : s;
+                            e = (isNaN(e)) ? 0 : e;
+                            w = (isNaN(w)) ? 0 : w;
+                            write.v.data[index] = (n + s + w + e) / k;
+                        }
+                    }
+                    else {
+                        write.v.data[index] = read.v.data[index];
+                    }
+                }
+            }
         }
     }
 
