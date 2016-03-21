@@ -199,8 +199,9 @@ function fluid(width, height, canvas) {
         // Advect velocity using the velocity field
         for(var i = 1; i < vDst.u.height - 1; i++) {
             for(var j = 1; j < vDst.u.width - 1; j++) {
-                // Handle liquid to liquid boundaries
-                if(mSrc.getBoundary(j, i + 0.5) == 1) {
+                // Handle liquid boundaries
+                var boundaryType = mSrc.getBoundary(j, i + 0.5);
+                if(boundaryType == 1 || boundaryType == 3) {
                     this.advect(j, i + 0.5, vDst.u, this.extV0.u,
                                 this.extV0, delta, 0.5, 0);
                 }
@@ -211,8 +212,9 @@ function fluid(width, height, canvas) {
         }
         for(var i = 1; i < vDst.v.height - 1; i++) {
             for(var j = 1; j < vDst.v.width - 1; j++) {
-                // Handle liquid to liquid boundaries
-                if(mSrc.getBoundary(j + 0.5, i) == 1) {
+                // Handle liquid boundaries
+                var boundaryType = mSrc.getBoundary(j + 0.5, i);
+                if(boundaryType == 1 || boundaryType == 3) {
                     this.advect(j + 0.5, i, vDst.v, this.extV0.v,
                                 this.extV0, delta, 0, 0.5);
                 }
@@ -417,7 +419,7 @@ function field(width, height, dimension) {
     }
 
     // Only applies to marker grid. It returns the interface type at the given coordinate
-    // Solid boundary = 0, Liquid boundary = 1, Air to air = 2;
+    // Solid boundary = 0, Liquid boundary = 1, Air to air = 2, Air to liquid = 3
     this.getBoundary = function(x, y) {
         // Horizonal boundary case
         if(y - Math.floor(y) != 0) {
@@ -430,6 +432,11 @@ function field(width, height, dimension) {
             // This is an air to air boundary if both sides are air
             if(this.data[r] == 2 && this.data[l] == 2) {
                 return 2;
+            }
+            // This is a air to liquid boundary
+            if((this.data[r] == 2 && this.data[l] == 1) ||
+               (this.data[r] == 1 && this.data[l] == 2)) {
+                return 3;
             }
             // Otherwise this is a purely liquid to liquid interface
             return 1;
@@ -445,6 +452,11 @@ function field(width, height, dimension) {
             // This is an air to air boundary if both sides are air
             if(this.data[b] == 2 && this.data[t] == 2) {
                 return 2;
+            }
+            // This is a air to liquid boundary
+            if((this.data[t] == 2 && this.data[b] == 1) ||
+               (this.data[t] == 1 && this.data[b] == 2)) {
+                return 3;
             }
             // Otherwise this is a purely liquid to liquid interface
             return 1;
