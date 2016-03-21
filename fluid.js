@@ -520,14 +520,10 @@ function field(width, height, dimension) {
         for(var i = 1; i < this.u.height - 1; i++) {
             for(var j = 1; j < this.u.width - 1; j++) {
                 var boundaryType = stencil.getBoundary(j, i + 0.5);
-                // If this velocity is between air cells, set it as NaN
+                // If this velocity is between air or solid cells, set it as NaN
                 var index = i * this.u.width + j;
-                if(boundaryType == 2) {
+                if(boundaryType == 2 || boundaryType == 0) {
                     dst.u.data[index] = Number.NaN;
-                }
-                // If this velocity is between involves a solid, set is as 0
-                else if(boundaryType == 0) {
-                    dst.u.data[index] = 0;
                 }
                 // If this velocity is between liquid cells, extract it from u
                 else {
@@ -538,14 +534,10 @@ function field(width, height, dimension) {
         for(var i = 1; i < this.v.height - 1; i++) {
             for(var j = 1; j < this.v.width - 1; j++) {
                 var boundaryType = stencil.getBoundary(j + 0.5, i);
-                // If this velocity is between air cells, set it as NaN
+                // If this velocity is between air or solid cells, set it as NaN
                 var index = i * this.v.width + j;
-                if(boundaryType == 2) {
+                if(boundaryType == 2 || boundaryType == 0) {
                     dst.v.data[index] = Number.NaN;
-                }
-                // If this velocity is between involves a solid, set is as 0
-                else if(boundaryType == 0) {
-                    dst.v.data[index] = 0;
                 }
                 // If this velocity is between liquid cells, extract it from u
                 else {
@@ -554,10 +546,10 @@ function field(width, height, dimension) {
             }
         }
 
-        // Propogate numbers through cells 5 times
+        // Propogate numbers through cells 10 times
         var write = dst;
         var read = scratch;
-        for(var l = 0; l < 5; l++) {
+        for(var l = 0; l < 10; l++) {
             write = (write == dst) ? scratch : dst;
             read = (write == dst) ? scratch : dst;
             for(var i = 1; i < this.u.height - 1; i++) {
@@ -629,6 +621,7 @@ function field(width, height, dimension) {
                 }
             }
         }
+        dst.updateBoundary(0);
     }
 
     this.zero = function() {
