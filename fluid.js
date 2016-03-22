@@ -8,8 +8,8 @@ function fluid(width, height, canvas) {
     this.showBack = true;
 
     // Rendered field
-    // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
-    this.renderedField = 1;
+    // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient, 5 = marker grid
+    this.renderedField = 5;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -40,8 +40,8 @@ function fluid(width, height, canvas) {
     this.gp = new field(width, height, 2);
 
     // Particle list for free surface
-    var particleCount = 400;
-    this.particles = new Array(particleCount);
+    this.particleCount = 2500;
+    this.particles = new Array(this.particleCount);
 
     // Zero out all the fields
     this.c0.fillZero();
@@ -59,8 +59,8 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < this.v0.u.height; i++) {
         for(var j = 0; j < this.v0.u.width; j++) {
             var index = i * this.v0.u.width + j;
-            this.v0.u.data[index] = -50;
-            this.v1.u.data[index] = -50;
+            this.v0.u.data[index] = 0;
+            this.v1.u.data[index] = 0;
         }
     }
 
@@ -96,21 +96,24 @@ function fluid(width, height, canvas) {
     }
 
     // Initialize all particles, and associated markers as liquid
-    var sqrtCount = Math.sqrt(particleCount);
+    var sqrtCount = Math.sqrt(this.particleCount);
     for(var i = 0; i < sqrtCount; i++) {
         for(var j = 0; j < sqrtCount; j++) {
-            this.particles[i * sqrtCount + j] = {x:i + 50, y: j + 50};
+            this.particles[i * sqrtCount + j] = {x:i + 50.5, y: j + 50.5};
             this.m0.data[(i + 50) * this.m0.width + (j + 50)] = 1;
             this.m1.data[(i + 50) * this.m1.width + (j + 50)] = 1;
         }
     }
+
+    // Reset velocities to be valid according to marker as a stencil
+    this.v0.extrapolate(this.extV0, this.m0, this.extV1);
 
     // Enforce no slip condition
     this.v0.updateBoundary(0);
     this.v1.updateBoundary(0);
 
     this.render = function() {
-        this.updateView(0.01);
+        this.updateView(0.5);
         this.ctx.putImageData(this.view, 0, 0);
     }
 
@@ -132,6 +135,8 @@ function fluid(width, height, canvas) {
                 break;
             case 4:
                 src = this.gp;
+            case 5:
+                src = this.showBack ? this.m0: this.m1;
             default:
         }
 
@@ -230,9 +235,47 @@ function fluid(width, height, canvas) {
             }
         }
 
+        // Apply gravity force to the grid
+        for(var i = 1; i < vDst.v.height - 1; i++) {
+            for(var j = 1; j < vDst.v.width - 1; j++) {
+                // Handle liquid boundaries
+                var boundaryType = mSrc.getBoundary(j + 0.5, i);
+                if(boundaryType == 1 || boundaryType == 3) {
+                    vDst.v.data[i * vDst.v.width + j] += 10;
+                }
+                else {
+                    vDst.v.data[i * vDst.v.width + j] = 0;
+                }
+            }
+        }
+
         // Enforce no-slip condition
         vDst.updateBoundary(0);
         this.project(vDst, mSrc);
+
+        // After the velocity solving step, advect the particles
+        for(var i = 0; i < this.particleCount; i++) {
+            var particle = this.particles[i];
+            // Sample the particle's velocity, and foward integrate its pos
+            var u = vDst.sample(particle.x, particle.y);
+            particle.x += u.x * delta;
+            particle.y += u.y * delta;
+        }
+
+        // Blank the marker field to just air with solid walls
+        for(var i = 0; i < mDst.height; i++) {
+            for(var j = 0; j < mDst.width; j++) {
+                mDst.data[i * mDst.width + j] = 2;
+            }
+        }
+        mDst.updateBoundary(0);
+
+        // Fill in liquid cells as needed
+        for(var i = 0; i < this.particleCount; i++) {
+            var particle = this.particles[i];
+            var index = Math.floor(particle.y) * this.width + Math.floor(particle.x);
+            mDst.data[index] = 1;
+        }
 
         // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
