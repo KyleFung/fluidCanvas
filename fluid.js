@@ -9,7 +9,7 @@ function fluid(width, height, canvas) {
 
     // Rendered field
     // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
-    this.renderedField = 0;
+    this.renderedField = 1;
 
     // Initialize rendering buffer
     this.view = this.ctx.createImageData(this.width, this.height);
@@ -39,6 +39,10 @@ function fluid(width, height, canvas) {
     this.p1 = new field(width, height, 1);
     this.gp = new field(width, height, 2);
 
+    // Particle list for free surface
+    var particleCount = 400;
+    this.particles = new Array(particleCount);
+
     // Zero out all the fields
     this.c0.fillZero();
     this.c1.fillZero();
@@ -55,12 +59,8 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < this.v0.u.height; i++) {
         for(var j = 0; j < this.v0.u.width; j++) {
             var index = i * this.v0.u.width + j;
-            var dx = j - 30;
-            var dy = i - 30;
-            if(dx * dx + dy * dy <= 500) {
-                this.v0.u.data[index] = -50;
-                this.v1.u.data[index] = -50;
-            }
+            this.v0.u.data[index] = -50;
+            this.v1.u.data[index] = -50;
         }
     }
 
@@ -68,12 +68,8 @@ function fluid(width, height, canvas) {
     for(var i = 0; i < this.v0.v.height; i++) {
         for(var j = 0; j < this.v0.v.width; j++) {
             var index = i * this.v0.v.width + j;
-            var dx = j - 30;
-            var dy = i - 30;
-            if(dx * dx + dy * dy <= 500) {
-                this.v0.v.data[index] = 0;
-                this.v1.v.data[index] = 0;
-            }
+            this.v0.v.data[index] = 0;
+            this.v1.v.data[index] = 0;
         }
     }
 
@@ -88,23 +84,33 @@ function fluid(width, height, canvas) {
                 this.c0.data[index] = 1.0;
                 this.c1.data[index] = 1.0;
             }
-
-            // Marker
-            this.m0.data[index] = 1;
-            this.m1.data[index] = 1;
         }
     }
 
-    // Mark solid walls accordingly
-    this.m0.updateBoundary(0);
-    this.m1.updateBoundary(0);
+    // Fill marker grid with air markers
+    for(var i = 1; i < height - 1; i++) {
+        for(var j = 1; j < width - 1; j++) {
+            this.m0.data[i * width + j] = 2;
+            this.m1.data[i * width + j] = 2;
+        }
+    }
+
+    // Initialize all particles, and associated markers as liquid
+    var sqrtCount = Math.sqrt(particleCount);
+    for(var i = 0; i < sqrtCount; i++) {
+        for(var j = 0; j < sqrtCount; j++) {
+            this.particles[i * sqrtCount + j] = {x:i + 50, y: j + 50};
+            this.m0.data[(i + 50) * this.m0.width + (j + 50)] = 1;
+            this.m1.data[(i + 50) * this.m1.width + (j + 50)] = 1;
+        }
+    }
 
     // Enforce no slip condition
     this.v0.updateBoundary(0);
     this.v1.updateBoundary(0);
 
     this.render = function() {
-        this.updateView(1.0);
+        this.updateView(0.01);
         this.ctx.putImageData(this.view, 0, 0);
     }
 
