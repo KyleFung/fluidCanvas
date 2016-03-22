@@ -40,8 +40,8 @@ function fluid(width, height, canvas) {
     this.gp = new field(width, height, 2);
 
     // Particle list for free surface
-    this.particleCount = 2500;
-    this.particles = new Array(this.particleCount);
+    this.particleCount = 2500 * 4;
+    this.particles = new Array();
 
     // Zero out all the fields
     this.c0.fillZero();
@@ -96,10 +96,13 @@ function fluid(width, height, canvas) {
     }
 
     // Initialize all particles, and associated markers as liquid
-    var sqrtCount = Math.sqrt(this.particleCount);
+    var sqrtCount = Math.sqrt(this.particleCount/4);
     for(var i = 0; i < sqrtCount; i++) {
         for(var j = 0; j < sqrtCount; j++) {
-            this.particles[i * sqrtCount + j] = {x:i + 50.5, y: j + 50.5};
+            this.particles[this.particles.length] = {x:i + 50.25, y: j + 50.25};
+            this.particles[this.particles.length] = {x:i + 50.75, y: j + 50.25};
+            this.particles[this.particles.length] = {x:i + 50.25, y: j + 50.75};
+            this.particles[this.particles.length] = {x:i + 50.75, y: j + 50.75};
             this.m0.data[(i + 50) * this.m0.width + (j + 50)] = 1;
             this.m1.data[(i + 50) * this.m1.width + (j + 50)] = 1;
         }
@@ -259,7 +262,11 @@ function fluid(width, height, canvas) {
             // Sample the particle's velocity, and foward integrate its pos
             var u = vDst.sample(particle.x, particle.y);
             particle.x += u.x * delta;
+            if(particle.x <= 1) particle.x = 2;
+            if(particle.x >= 124) particle.x = 124;
             particle.y += u.y * delta;
+            if(particle.y <= 1) particle.y = 2;
+            if(particle.y >= 124) particle.y = 124;
         }
 
         // Blank the marker field to just air with solid walls
