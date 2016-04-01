@@ -197,7 +197,7 @@ function fluid(width, height, canvas) {
     }
 
     this.step = function() {
-        var delta = 0.1;
+        var delta = 0.01;
         var vDst = !this.showBack ? this.v0: this.v1;
         var vSrc = this.showBack ? this.v0: this.v1;
 
@@ -252,21 +252,38 @@ function fluid(width, height, canvas) {
             }
         }
 
-        // Enforce no-slip condition
+        // Enforce no slip condition
         vDst.updateBoundary(0);
-        this.project(vDst, mSrc);
+
+        // Reflect changes into extrapolated velocity and project
+        vDst.extrapolate(this.extV0, mSrc, this.extV1);
+        this.project(this.extV0, mSrc);
+
+        // Copy extrapolated velocity into dst
+        for(var i = 0; i < vDst.u.height; i++) {
+            for(var j = 0; j < vDst.u.width; j++) {
+                var index = i * vDst.u.width + j;
+                vDst.u.data[index] = this.extV0.u.data[index];
+            }
+        }
+        for(var i = 0; i < vDst.v.height; i++) {
+            for(var j = 0; j < vDst.v.width; j++) {
+                var index = i * vDst.v.width + j;
+                vDst.v.data[index] = this.extV0.v.data[index];
+            }
+        }
 
         // After the velocity solving step, advect the particles
         for(var i = 0; i < this.particleCount; i++) {
             var particle = this.particles[i];
             // Sample the particle's velocity, and foward integrate its pos
-            var u = vDst.sample(particle.x, particle.y);
+            var u = this.extV0.sample(particle.x, particle.y);
             particle.x += u.x * delta;
-            if(particle.x <= 1) particle.x = 2;
-            if(particle.x >= 124) particle.x = 124;
+            if(particle.x <= 1) particle.x = 1.5;
+            if(particle.x >= 124) particle.x = 123.5;
             particle.y += u.y * delta;
-            if(particle.y <= 1) particle.y = 2;
-            if(particle.y >= 124) particle.y = 124;
+            if(particle.y <= 1) particle.y = 1.5;
+            if(particle.y >= 124) particle.y = 123.5;
         }
 
         // Blank the marker field to just air with solid walls
