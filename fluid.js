@@ -410,17 +410,6 @@ function field(width, height, dimension) {
             // Enforce boundary conditions on outside wall
             dest.updateBoundary(boundary);
 
-            // Enforce boundary conditions for air to liquid boundaries
-            for(var i = 0; i < dest.height - 1; i++) {
-                for(var j = 0; j < dest.width - 1; j++) {
-                    var index = i * dest.height + j;
-                    // Where there's air, there's 0 pressure
-                    if(marker[index] == 2) {
-                        dest.data[index] = 0;
-                    }
-                }
-            }
-
             // Calculate latest value
             for(var j = 1; j < dest.height - 1; j++) {
                 for(var k = 1; k < dest.width - 1; k++) {
@@ -435,6 +424,17 @@ function field(width, height, dimension) {
                     var alphaB = b.data[index] * alpha;
 
                     dest.data[index] = (w + n + e + s + alphaB) / beta;
+                }
+            }
+
+            // Enforce boundary conditions for air to liquid boundaries
+            for(var i = 0; i < dest.height - 1; i++) {
+                for(var j = 0; j < dest.width - 1; j++) {
+                    var index = i * dest.height + j;
+                    // Where there's air, there's 0 pressure
+                    if(marker.data[index] == 2) {
+                        dest.data[index] = 0;
+                    }
                 }
             }
 
