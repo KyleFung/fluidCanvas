@@ -167,6 +167,36 @@ function fluid(width, height, canvas) {
         this.view.data[index + 3] = 255;
     }
 
+    // Advects the u and v components of vDst using vSrc and a stencil
+    this.advectVel = function(vDst, vSrc, stencil, delta) {
+        for(var i = 1; i < vDst.u.height - 1; i++) {
+            for(var j = 1; j < vDst.u.width - 1; j++) {
+                // Handle liquid boundaries
+                var boundaryType = stencil.getBoundary(j, i + 0.5);
+                if(boundaryType == 1 || boundaryType == 3) {
+                    this.advect(j, i + 0.5, vDst.u, vSrc.u,
+                                vSrc, delta, 0.5, 0);
+                }
+                else {
+                    vDst.u.data[i * vDst.u.width + j] = 0;
+                }
+            }
+        }
+        for(var i = 1; i < vDst.v.height - 1; i++) {
+            for(var j = 1; j < vDst.v.width - 1; j++) {
+                // Handle liquid boundaries
+                var boundaryType = stencil.getBoundary(j + 0.5, i);
+                if(boundaryType == 1 || boundaryType == 3) {
+                    this.advect(j + 0.5, i, vDst.v, vSrc.v,
+                                vSrc, delta, 0, 0.5);
+                }
+                else {
+                    vDst.v.data[i * vDst.v.width + j] = 0;
+                }
+            }
+        }
+    }
+
     // Advects a quantity at (x, y) in src using vel into dst
     this.advect = function(x, y, dst, src, vel, delta, offsetX, offsetY) {
         // Integrate backwards in time by solving for (x0,y0)
@@ -177,6 +207,55 @@ function fluid(width, height, canvas) {
         // Solve q1(x,y) by interpolating for q0(x0,y0)
         var result = src.sample(x0 + offsetX, y0 + offsetY);
         dst.data[Math.floor(y) * dst.width + Math.floor(x)] = result;
+    }
+
+    // Advects an array of particles using a given velocity field
+    this.advectParticles = function(vel, particles, delta) {
+        for(var i = 0; i < particles.length; i++) {
+            var particle = particles[i];
+            // Sample the particle's velocity, and foward integrate its pos
+            var u = vel.sample(particle.x, particle.y);
+            particle.x += u.x * delta;
+            if(particle.x <= 1) particle.x = 1.5;
+            if(particle.x >= this.width - 1) particle.x = this.width - 1.5;
+            particle.y += u.y * delta;
+            if(particle.y <= 1) particle.y = 1.5;
+            if(particle.y >= this.width - 1) particle.y = this.width - 1.5;
+        }
+    }
+
+    // Updates the marker grid given an array of particles
+    this.updateMarkers = function(mDst, particles) {
+        // Fill in the whole grid with air cells and with solid boundaries
+        for(var i = 0; i < mDst.height; i++) {
+            for(var j = 0; j < mDst.width; j++) {
+                mDst.data[i * mDst.width + j] = 2;
+            }
+        }
+        mDst.updateBoundary(0);
+
+        // Fill in liquid cells as needed
+        for(var i = 0; i < particles.length; i++) {
+            var particle = particles[i];
+            var index = Math.floor(particle.y) * this.width + Math.floor(particle.x);
+            mDst.data[index] = 1;
+        }
+    }
+
+    // Applies gravitational acceleration to velocity field over the stencil
+    this.applyGravity = function(vDst, stencil) {
+        for(var i = 1; i < vDst.v.height - 1; i++) {
+            for(var j = 1; j < vDst.v.width - 1; j++) {
+                // Handle liquid boundaries
+                var boundaryType = stencil.getBoundary(j + 0.5, i);
+                if(boundaryType == 1 || boundaryType == 3) {
+                    vDst.v.data[i * vDst.v.width + j] += 10;
+                }
+                else {
+                    vDst.v.data[i * vDst.v.width + j] = 0;
+                }
+            }
+        }
     }
 
     // Project the given velocity field onto its divergence free component
@@ -211,46 +290,10 @@ function fluid(width, height, canvas) {
         vSrc.extrapolate(this.extV0, mSrc, this.extV1);
 
         // Advect velocity using the velocity field
-        for(var i = 1; i < vDst.u.height - 1; i++) {
-            for(var j = 1; j < vDst.u.width - 1; j++) {
-                // Handle liquid boundaries
-                var boundaryType = mSrc.getBoundary(j, i + 0.5);
-                if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j, i + 0.5, vDst.u, this.extV0.u,
-                                this.extV0, delta, 0.5, 0);
-                }
-                else {
-                    vDst.u.data[i * vDst.u.width + j] = 0;
-                }
-            }
-        }
-        for(var i = 1; i < vDst.v.height - 1; i++) {
-            for(var j = 1; j < vDst.v.width - 1; j++) {
-                // Handle liquid boundaries
-                var boundaryType = mSrc.getBoundary(j + 0.5, i);
-                if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j + 0.5, i, vDst.v, this.extV0.v,
-                                this.extV0, delta, 0, 0.5);
-                }
-                else {
-                    vDst.v.data[i * vDst.v.width + j] = 0;
-                }
-            }
-        }
+        this.advectVel(vDst, this.extV0, mSrc, delta);
 
         // Apply gravity force to the grid
-        for(var i = 1; i < vDst.v.height - 1; i++) {
-            for(var j = 1; j < vDst.v.width - 1; j++) {
-                // Handle liquid boundaries
-                var boundaryType = mSrc.getBoundary(j + 0.5, i);
-                if(boundaryType == 1 || boundaryType == 3) {
-                    vDst.v.data[i * vDst.v.width + j] += 10;
-                }
-                else {
-                    vDst.v.data[i * vDst.v.width + j] = 0;
-                }
-            }
-        }
+        this.applyGravity(vDst, mSrc);
 
         // Enforce no slip condition
         vDst.updateBoundary(0);
@@ -258,56 +301,13 @@ function fluid(width, height, canvas) {
         // Reflect changes into extrapolated velocity and project
         vDst.extrapolate(this.extV0, mSrc, this.extV1);
         this.project(this.extV0, mSrc);
-
-        // Copy extrapolated velocity into dst
-        for(var i = 0; i < vDst.u.height; i++) {
-            for(var j = 0; j < vDst.u.width; j++) {
-                var index = i * vDst.u.width + j;
-                vDst.u.data[index] = this.extV0.u.data[index];
-            }
-        }
-        for(var i = 0; i < vDst.v.height; i++) {
-            for(var j = 0; j < vDst.v.width; j++) {
-                var index = i * vDst.v.width + j;
-                vDst.v.data[index] = this.extV0.v.data[index];
-            }
-        }
+        vDst.copy(this.extV0);
 
         // After the velocity solving step, advect the particles
-        for(var i = 0; i < this.particleCount; i++) {
-            var particle = this.particles[i];
-            // Sample the particle's velocity, and foward integrate its pos
-            var u = this.extV0.sample(particle.x, particle.y);
-            particle.x += u.x * delta;
-            if(particle.x <= 1) particle.x = 1.5;
-            if(particle.x >= 124) particle.x = 123.5;
-            particle.y += u.y * delta;
-            if(particle.y <= 1) particle.y = 1.5;
-            if(particle.y >= 124) particle.y = 123.5;
-        }
+        this.advectParticles(this.extV0, this.particles, delta);
 
         // Blank the marker field to just air with solid walls
-        for(var i = 0; i < mDst.height; i++) {
-            for(var j = 0; j < mDst.width; j++) {
-                mDst.data[i * mDst.width + j] = 2;
-            }
-        }
-        mDst.updateBoundary(0);
-
-        // Fill in liquid cells as needed
-        for(var i = 0; i < this.particleCount; i++) {
-            var particle = this.particles[i];
-            var index = Math.floor(particle.y) * this.width + Math.floor(particle.x);
-            mDst.data[index] = 1;
-        }
-
-        // Advect concentration using the velocity field
-        for(var i = 1; i < this.height - 1; i++) {
-            for(var j = 1; j < this.width - 1; j++) {
-                // Advect the concentration field
-                this.advect(j + 0.5, i + 0.5, cDst, cSrc, vDst, delta, 0, 0);
-            }
-        }
+        this.updateMarkers(mDst, this.particles);
 
         this.showBack = !this.showBack;
     }
@@ -596,6 +596,18 @@ function field(width, height, dimension) {
         }
         if(this.dimension == 2) {
             return {x:k * a.x, y:k * a.y};
+        }
+    }
+
+    this.copy = function(other) {
+        if(this.dimension == 1) {
+            for(var i = 0; i < this.width * this.height; i++) {
+                this.data[i] = other.data[i];
+            }
+        }
+        if(this.dimension == 2) {
+            this.u.copy(other.u);
+            this.v.copy(other.v);
         }
     }
 
