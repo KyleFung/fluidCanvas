@@ -33,6 +33,11 @@ function fluid(width, height, canvas) {
     // Divergence of velocity
     this.div = new field(width, height, 1);
 
+    // Vorticity (Scalar curl of velocity) and its spin direction
+    this.vor = new field(width, height, 1);
+    this.gVor = new field(width, height, 2);
+    this.con = new field(width, height, 2);
+
     // Pressure and its gradient
     // p0 is for scratch calculations; p1 holds the actual values
     this.p0 = new field(width, height, 1);
@@ -228,6 +233,14 @@ function fluid(width, height, canvas) {
         vDst.updateBoundary(0);
         this.project(vDst, mSrc);
 
+        // Apply vorticity confinement and determine arm direction
+        vDst.curl(this.vor);
+        this.vor.gradient(this.gVor);
+        this.gVor.normalize();
+        this.con.cross(this.gVor, this.vor);
+        this.con.mult(delta);
+        vDst.add(this.con);
+
         // Advect concentration using the velocity field
         for(var i = 1; i < this.height - 1; i++) {
             for(var j = 1; j < this.width - 1; j++) {
@@ -336,6 +349,74 @@ function field(width, height, dimension) {
                 var e = this.u.data[i * this.u.width + j + 1];
 
                 dst.data[i * dst.width + j] = (e - w) + (s - n);
+            }
+        }
+    }
+
+    // Calculate the scalar curl of field into dst
+    // Assumes dst is the same size as field
+    this.curl = function(dst) {
+        dst.fillZero();
+        for(var i = 1; i < dst.height - 1; i++) {
+            for(var j = 1; j < dst.width - 1; j++) {
+                var vnw = this.v.data[i * this.v.width + j - 1];
+                var vne = this.v.data[i * this.v.width + j + 1];
+                var vsw = this.v.data[(i + 1) * this.v.width + j - 1];
+                var vse = this.v.data[(i + 1) * this.v.width + j + 1];
+                var dvdx = ((vne - vnw) + (vse - vsw)) * 0.25;
+
+                var unw = this.u.data[(i - 1) * this.u.width + j];
+                var une = this.u.data[(i - 1) * this.u.width + j + 1];
+                var usw = this.u.data[(i + 1) * this.u.width + j];
+                var use = this.u.data[(i + 1) * this.u.width + j + 1];
+                var dudy = ((usw - unw) + (use - une)) * 0.25;
+
+                dst.data[i * dst.width + j] = dvdx - dudy;
+            }
+        }
+    }
+
+    this.normalize = function() {
+        for(var i = 0; i < this.u.height; i++) {
+            for(var j = 0; j < this.u.width; j++) {
+                var u = this.sample(j, i + 0.5);
+                var mag = Math.sqrt(u.x * u.x + u.y * u.y);
+                if(mag != 0) {
+                    this.u.data[i * this.u.width + j] /= mag;
+                }
+                else {
+                    this.u.data[i * this.u.width + j] = 0;
+                }
+            }
+        }
+        for(var i = 0; i < this.v.height; i++) {
+            for(var j = 0; j < this.v.width; j++) {
+                var u = this.sample(j + 0.5, i);
+                var mag = Math.sqrt(u.x * u.x + u.y * u.y);
+                if(mag != 0) {
+                    this.v.data[i * this.v.width + j] /= mag;
+                }
+                else {
+                    this.v.data[i * this.v.width + j] = 0;
+                }
+            }
+        }
+    }
+
+    this.cross = function(left, right) {
+        this.fillZero();
+        for(var i = 1; i < this.u.height - 1; i++) {
+            for(var j = 1; j < this.u.width - 1; j++) {
+                var y = left.sample(j, i + 0.5).y;
+                var w = right.sample(j, i + 0.5);
+                this.u.data[i * this.u.width + j] = y * w;
+            }
+        }
+        for(var i = 1; i < this.v.height - 1; i++) {
+            for(var j = 1; j < this.v.width - 1; j++) {
+                var x = left.sample(j + 0.5, i).x;
+                var w = right.sample(j + 0.5, i);
+                this.v.data[i * this.v.width + j] = -1 * x * w;
             }
         }
     }
@@ -514,6 +595,40 @@ function field(width, height, dimension) {
         if(this.dimension == 2) {
             this.u.subtract(other.u);
             this.v.subtract(other.v);
+        }
+    }
+
+    // Calculate (this + other) into this
+    this.add = function(other) {
+        // Loop through and add element by element
+        if(this.dimension == 1) {
+            for(var i = 0; i < this.height; i++) {
+                for(var j = 0; j < this.width; j++) {
+                    var index = i * this.width + j;
+                    this.data[index] = this.data[index] + other.data[index];
+                }
+            }
+        }
+        if(this.dimension == 2) {
+            this.u.add(other.u);
+            this.v.add(other.v);
+        }
+    }
+
+    // Calculate (this * scale) into this
+    this.mult = function(scale) {
+        // Loop through and multiply each element
+        if(this.dimension == 1) {
+            for(var i = 0; i < this.height; i++) {
+                for(var j = 0; j < this.width; j++) {
+                    var index = i * this.width + j;
+                    this.data[index] = this.data[index] * scale;
+                }
+            }
+        }
+        if(this.dimension == 2) {
+            this.u.mult(scale);
+            this.v.mult(scale);
         }
     }
 
