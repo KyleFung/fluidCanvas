@@ -7,6 +7,13 @@ function fluid(width, height, canvas) {
     this.ctx = canvas.getContext('2d');
     this.showBack = true;
 
+    // Mouse coordinates
+    this.mouseDown = false;
+    this.mX = 0;
+    this.mY = 0;
+    this.dmX = 0;
+    this.dmY = 0;
+
     // Rendered field
     // 0 = concentration, 1 = velocity, 2 = divergence, 3 = pressure, 4 = pressure gradient
     this.renderedField = 0;
@@ -35,6 +42,7 @@ function fluid(width, height, canvas) {
 
     // Vorticity (Scalar curl of velocity) and its spin direction
     this.vor = new field(width, height, 1);
+    this.noise = new field(width, height, 2);
     this.gVor = new field(width, height, 2);
     this.con = new field(width, height, 2);
 
@@ -56,50 +64,6 @@ function fluid(width, height, canvas) {
     this.extV0.fillZero();
     this.extV1.fillZero();
 
-    // Fill in u component of vector fields
-    for(var i = 0; i < this.v0.u.height; i++) {
-        for(var j = 0; j < this.v0.u.width; j++) {
-            var index = i * this.v0.u.width + j;
-            var dx = j - 30;
-            var dy = i - 30;
-            if(dx * dx + dy * dy <= 500) {
-                this.v0.u.data[index] = -50;
-                this.v1.u.data[index] = -50;
-            }
-        }
-    }
-
-    // Fill in v component of vector fields
-    for(var i = 0; i < this.v0.v.height; i++) {
-        for(var j = 0; j < this.v0.v.width; j++) {
-            var index = i * this.v0.v.width + j;
-            var dx = j - 30;
-            var dy = i - 30;
-            if(dx * dx + dy * dy <= 500) {
-                this.v0.v.data[index] = 0;
-                this.v1.v.data[index] = 0;
-            }
-        }
-    }
-
-    // Fill in scalar fields
-    for(var i = 0; i < height; i++) {
-        for(var j = 0; j < width; j++) {
-            var index = i * width + j;
-            // Concentration
-            var dx = j - 30;
-            var dy = i - 30;
-            if(dx * dx + dy * dy < 300) {
-                this.c0.data[index] = 1.0;
-                this.c1.data[index] = 1.0;
-            }
-
-            // Marker
-            this.m0.data[index] = 1;
-            this.m1.data[index] = 1;
-        }
-    }
-
     // Mark solid walls accordingly
     this.m0.updateBoundary(0);
     this.m1.updateBoundary(0);
@@ -111,6 +75,14 @@ function fluid(width, height, canvas) {
     this.render = function() {
         this.updateView(1.0);
         this.ctx.putImageData(this.view, 0, 0);
+    }
+
+    // Sets the mouse coordinates
+    this.updateMouse = function(x, y) {
+        this.dmX = x - this.mX;
+        this.dmY = y - this.mY;
+        this.mX = x;
+        this.mY = y;
     }
 
     this.updateView = function(scale) {
@@ -225,6 +197,23 @@ function fluid(width, height, canvas) {
         // Advect velocity using the velocity field
         this.advectField(vDst, vSrc, vSrc, delta, mSrc, 0, 0);
 
+        // Apply force
+        if(this.mouseDown) {
+            for(var i = 1; i < this.height - 1; i++) {
+                for(var j = 1; j < this.width - 1; j++) {
+                    var dx = this.mX - j;
+                    var dy = this.mY - i;
+                    if(dx * dx + dy * dy < 25) {
+                        vDst.u.data[i * vDst.u.width + j] += this.dmX;
+                        vDst.v.data[i * vDst.v.width + j] += this.dmY;
+                        cSrc.data[i * cDst.width + j] = 1;
+                    }
+                }
+            }
+            this.dmX = 0;
+            this.dmY = 0;
+        }
+
         // Enforce no-slip condition
         vDst.updateBoundary(0);
         this.project(vDst, mSrc);
@@ -235,6 +224,20 @@ function fluid(width, height, canvas) {
         this.gVor.normalize();
         this.con.cross(this.gVor, this.vor);
         this.con.mult(delta);
+        vDst.add(this.con);
+
+        // Introduce curl noise
+        for(var i = 0; i < this.noise.u.width * this.noise.u.height; i++) {
+            this.noise.u.data[i] = Math.random();
+        }
+        for(var i = 0; i < this.noise.v.width * this.noise.v.height; i++) {
+            this.noise.v.data[i] = Math.random();
+        }
+        this.noise.curl(this.vor);
+        this.vor.gradient(this.gVor);
+        this.gVor.normalize();
+        this.con.cross(this.gVor, this.vor);
+        this.con.mult(0.5);
         vDst.add(this.con);
 
         // Advect concentration using the velocity field

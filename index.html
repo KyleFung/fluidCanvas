@@ -12,6 +12,16 @@
 
             // Create the fluid
             var f = new fluid(length, length, canvas);
+            canvas.addEventListener('mousemove', function(e) {
+                var rect = canvas.getBoundingClientRect();
+                f.updateMouse((e.clientX - rect.left) | 0, (e.clientY - rect.top) | 0);
+            });
+            canvas.addEventListener('mousedown', function(e) {
+                f.mouseDown = true;
+            });
+            canvas.addEventListener('mouseup', function(e) {
+                f.mouseDown = false;
+            });
 
             // Stolen animation code (what is javascript?)
             var requestAnimationFrame = (window.requestAnimationFrame       ||
