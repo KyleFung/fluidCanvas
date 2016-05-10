@@ -198,17 +198,14 @@ function fluid(width, height, canvas) {
         var mDst = !this.showBack ? this.m0: this.m1;
         var mSrc = this.showBack ? this.m0: this.m1;
 
-        // Extrapolate the source velocity field
-        vSrc.extrapolate(this.extV0, mSrc, this.extV1);
-
         // Advect velocity using the velocity field
         for(var i = 1; i < vDst.u.height - 1; i++) {
             for(var j = 1; j < vDst.u.width - 1; j++) {
                 // Handle liquid boundaries
                 var boundaryType = mSrc.getBoundary(j, i + 0.5);
                 if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j, i + 0.5, vDst.u, this.extV0.u,
-                                this.extV0, delta, 0.5, 0);
+                    this.advect(j, i + 0.5, vDst.u, vSrc.u,
+                                vSrc, delta, 0.5, 0);
                 }
                 else {
                     vDst.u.data[i * vDst.u.width + j] = 0;
@@ -220,8 +217,8 @@ function fluid(width, height, canvas) {
                 // Handle liquid boundaries
                 var boundaryType = mSrc.getBoundary(j + 0.5, i);
                 if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j + 0.5, i, vDst.v, this.extV0.v,
-                                this.extV0, delta, 0, 0.5);
+                    this.advect(j + 0.5, i, vDst.v, vSrc.v,
+                                vSrc, delta, 0, 0.5);
                 }
                 else {
                     vDst.v.data[i * vDst.v.width + j] = 0;
