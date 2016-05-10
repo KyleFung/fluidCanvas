@@ -158,6 +158,30 @@ function fluid(width, height, canvas) {
         this.view.data[index + 3] = 255;
     }
 
+    // Advect an entire field given a dst, src, and vel
+    // Offsets are used to deal with staggered grids
+    this.advectField = function(dst, src, vel, delta, stencil, offsetX, offsetY) {
+        if(dst.dimension == 1) {
+            for(var i = 1; i < dst.height - 1; i++) {
+                for(var j = 1; j < dst.width - 1; j++) {
+                    // Handle liquid boundaries
+                    var boundaryType = stencil.getBoundary(j + offsetX, i + offsetY);
+                    if(boundaryType == 1 || boundaryType == 3) {
+                        this.advect(j + offsetX, i + offsetY, dst, src,
+                                    vel, delta, offsetY, offsetX);
+                    }
+                    else {
+                        dst.data[i * dst.width + j] = 0;
+                    }
+                }
+            }
+        }
+        if(dst.dimension == 2) {
+            this.advectField(dst.u, src.u, vel, delta, stencil, 0, 0.5);
+            this.advectField(dst.v, src.v, vel, delta, stencil, 0.5, 0);
+        }
+    }
+
     // Advects a quantity at (x, y) in src using vel into dst
     this.advect = function(x, y, dst, src, vel, delta, offsetX, offsetY) {
         // Integrate backwards in time by solving for (x0,y0)
@@ -199,32 +223,7 @@ function fluid(width, height, canvas) {
         var mSrc = this.showBack ? this.m0: this.m1;
 
         // Advect velocity using the velocity field
-        for(var i = 1; i < vDst.u.height - 1; i++) {
-            for(var j = 1; j < vDst.u.width - 1; j++) {
-                // Handle liquid boundaries
-                var boundaryType = mSrc.getBoundary(j, i + 0.5);
-                if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j, i + 0.5, vDst.u, vSrc.u,
-                                vSrc, delta, 0.5, 0);
-                }
-                else {
-                    vDst.u.data[i * vDst.u.width + j] = 0;
-                }
-            }
-        }
-        for(var i = 1; i < vDst.v.height - 1; i++) {
-            for(var j = 1; j < vDst.v.width - 1; j++) {
-                // Handle liquid boundaries
-                var boundaryType = mSrc.getBoundary(j + 0.5, i);
-                if(boundaryType == 1 || boundaryType == 3) {
-                    this.advect(j + 0.5, i, vDst.v, vSrc.v,
-                                vSrc, delta, 0, 0.5);
-                }
-                else {
-                    vDst.v.data[i * vDst.v.width + j] = 0;
-                }
-            }
-        }
+        this.advectField(vDst, vSrc, vSrc, delta, mSrc, 0, 0);
 
         // Enforce no-slip condition
         vDst.updateBoundary(0);
